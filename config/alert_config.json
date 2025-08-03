@@ -1,0 +1,19 @@
+{
+    "email": {
+        "enabled": false,
+        "smtp_server": "smtp.entreprise.com",
+        "smtp_port": 587,
+        "username": "ids@entreprise.com",
+        "password_env_var": "IDS_EMAIL_PASSWORD",
+        "from_address": "ids@entreprise.com",
+        "to_addresses": [
+            "securite@entreprise.com"
+        ]
+    },
+    "thresholds": {
+        "warning": 1,
+        "critical": 5
+    },
+    "check_interval": 300,
+    "alert_cooldown": 3600
+}
