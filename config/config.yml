@@ -1,0 +1,33 @@
+random_seed: 42
+
+features:
+  # Si vide => toutes les colonnes numériques (hors 'label') seront utilisées.
+  include: []
+
+scaling:
+  strategy: standard  # 'standard' ou 'none'
+  clip_percentile: 99 # capping des valeurs extrêmes avant scaling
+
+model:
+  type: isolation_forest
+  params:
+    n_estimators: 150
+    max_samples: "auto"
+    contamination: 0.05
+    random_state: 42
+
+thresholding:
+  # On utilise la prédiction du modèle (-1 anomalie / 1 normal) + decision_function.
+  # Ici indicatif; run_detector exporte un score dans results.json.
+  use_model_predict: true
+
+alerts:
+  enabled: false
+  smtp_host: "smtp.example.com"
+  smtp_port: 587
+  username: "ids@example.com"
+  password_env: "IDS_SMTP_PASS"   # mot de passe via variable d'env CI/CD ou machine
+  to: ["soc@example.com"]
+  min_interval_sec: 300
+  warning_count: 1
+  critical_count: 5

@@ -1,19 +1,11 @@
 {
-    "email": {
-        "enabled": false,
-        "smtp_server": "smtp.entreprise.com",
-        "smtp_port": 587,
-        "username": "ids@entreprise.com",
-        "password_env_var": "IDS_EMAIL_PASSWORD",
-        "from_address": "ids@entreprise.com",
-        "to_addresses": [
-            "securite@entreprise.com"
-        ]
-    },
-    "thresholds": {
-        "warning": 1,
-        "critical": 5
-    },
-    "check_interval": 300,
-    "alert_cooldown": 3600
+  "enabled": false,
+  "smtp_host": "smtp.example.com",
+  "smtp_port": 587,
+  "username": "ids@example.com",
+  "password_env": "IDS_SMTP_PASS",
+  "to": ["soc@example.com"],
+  "min_interval_sec": 300,
+  "warning_count": 1,
+  "critical_count": 5
 }
