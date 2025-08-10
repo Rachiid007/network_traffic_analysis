@@ -1,0 +1,90 @@
+# --- Python bytecode & caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtual environments (keep dependencies reproducible via requirements/pyproject)
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+
+# --- Test, coverage & type-checker artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.coverage.*
+.tox/
+.nox/
+.mypy_cache/
+.dmypy.json
+.pyre/
+.pytype/
+.hypothesis/
+.ruff_cache/
+
+# --- Packaging/build artifacts (anywhere in the tree, incl. ids_iforest_package/)
+**/build/
+**/dist/
+**/*.egg-info/
+.eggs/
+*.egg
+wheels/
+pip-wheel-metadata/
+
+# --- Jupyter autosave (keep notebooks themselves if you add any)
+.ipynb_checkpoints/
+
+# --- Logs (runtime)
+logs/**
+config/logs/**
+!logs/.gitkeep
+!config/logs/.gitkeep
+
+# --- Data (don’t version datasets; keep your small sample)
+data/raw/**
+data/processed/**
+!data/.gitkeep
+!data/processed/csecic2018_small.csv
+
+# --- Models (track JSON metadata, ignore trained binaries)
+models/**
+!models/*.json
+!models/README.md
+!models/.gitkeep
+
+# --- Local config & secrets
+*.local.*
+*.secret.*
+.env
+.env.*
+!.env.example
+# Optional: if you keep a local-only config next to the sample:
+config/config.local.yml
+
+# --- Editors & OS cruft
+# VS Code: ignore folder but allow common sharable files
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# --- Docker/compose local overrides
+docker-compose.override.yml
+*.pid
+*.pid.lock
+
+# --- Misc
+# If you export figures/reports
+reports/
+*.tmp
+*.swp

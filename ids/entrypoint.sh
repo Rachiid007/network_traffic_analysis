@@ -11,6 +11,10 @@ MODEL_DIR="/app/models"
 LOGS_DIR="/app/logs"
 CFG="/app/config/config.yml"
 
+echo "[*] Starting IDS with config: $CFG"
+# Helpful: list interfaces to confirm dumpcap can see 'eth0' (not only extcaps)
+tshark -D || true
+
 # Ensure directories exist
 mkdir -p "$MODEL_DIR" "$LOGS_DIR"
 

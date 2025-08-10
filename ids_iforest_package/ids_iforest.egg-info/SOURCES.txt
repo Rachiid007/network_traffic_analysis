@@ -1,0 +1,17 @@
+pyproject.toml
+ids_iforest/__init__.py
+ids_iforest/capture.py
+ids_iforest/detect.py
+ids_iforest/pcap2flows.py
+ids_iforest/server.py
+ids_iforest/train.py
+ids_iforest/utils.py
+ids_iforest.egg-info/PKG-INFO
+ids_iforest.egg-info/SOURCES.txt
+ids_iforest.egg-info/dependency_links.txt
+ids_iforest.egg-info/entry_points.txt
+ids_iforest.egg-info/requires.txt
+ids_iforest.egg-info/top_level.txt
+ids_iforest/scripts/__init__.py
+ids_iforest/scripts/generate_datasets.py
+ids_iforest/scripts/prepare_csecic2018.py

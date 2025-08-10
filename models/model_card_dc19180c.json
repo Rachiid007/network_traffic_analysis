@@ -1,0 +1,21 @@
+{
+  "git_hash": "dc19180c464b33c4f241849284df508857c5e21d",
+  "feature_set": "extended",
+  "contamination": 0.02,
+  "n_estimators": 200,
+  "train_rows": 600000,
+  "columns_numeric": [
+    "bidirectional_packets",
+    "bidirectional_bytes",
+    "mean_packet_size",
+    "std_packet_size",
+    "flow_duration",
+    "tcp_syn_count",
+    "tcp_fin_count",
+    "tcp_rst_count",
+    "iat_mean",
+    "iat_std",
+    "bytes_per_packet",
+    "packets_per_second"
+  ]
+}

@@ -1,0 +1,7 @@
+[console_scripts]
+ids-iforest-capture = ids_iforest.capture:main
+ids-iforest-detect = ids_iforest.detect:main
+ids-iforest-generate = ids_iforest.scripts.generate_datasets:main
+ids-iforest-pcap2csv = ids_iforest.pcap2flows:main
+ids-iforest-server = ids_iforest.server:main
+ids-iforest-train = ids_iforest.train:main

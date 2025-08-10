@@ -43,7 +43,7 @@ Docker Compose.
 ### Prerequisites
 
 * Docker and Docker Compose
-* Python 3.11+ (only required if running outside of Docker)
+* Python 3.13+ (only required if running outside of Docker)
 
 ### Installation
 

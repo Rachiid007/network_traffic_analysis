@@ -8,7 +8,7 @@ variables:
 
 lint:
   stage: lint
-  image: python:3.11-slim
+  image: python:3.13-slim
   script:
     - pip install flake8
     - flake8 ids_iforest_package/ids_iforest
@@ -16,7 +16,7 @@ lint:
 
 test:
   stage: test
-  image: python:3.11-slim
+  image: python:3.13-slim
   before_script:
     - pip install -e ids_iforest_package
     - pip install pytest
