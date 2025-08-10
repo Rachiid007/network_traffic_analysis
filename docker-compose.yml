@@ -1,0 +1,33 @@
+services:
+  web:
+    build: ./web
+    container_name: victim_web
+    ports:
+      - "8080:80"  # expose the web server on localhost:8080
+
+  ids:
+    build:
+      context: .
+      dockerfile: ids/Dockerfile
+    container_name: ids_iforest
+    # Expose the IDS web interface on port 5000.
+    ports:
+      - "5000:5000"
+    # Run the container in privileged mode so tshark/pyshark can sniff traffic on the
+    # docker bridge network.  Without this, packet capture is restricted.
+    privileged: true
+    volumes:
+      - ./models:/app/models
+      - ./logs:/app/logs
+      - ./config:/app/config
+    depends_on:
+      - web
+
+  attacker:
+    build: ./attacker
+    container_name: attacker
+    depends_on:
+      - web
+    environment:
+      - TARGET_HOST=web
+      - TARGET_PORT=80

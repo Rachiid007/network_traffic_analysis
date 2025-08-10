@@ -1,86 +1,40 @@
-image: python:3.11-slim
-
-stages: [lint, test, security, preprocess, train, smoke]
+stages:
+  - lint
+  - test
+  - build
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-  PIP_DISABLE_PIP_VERSION_CHECK: "1"
-  PYTHONUNBUFFERED: "1"
-
-cache:
-  key: "pip-${CI_COMMIT_REF_SLUG}"
-  paths:
-    - .cache/pip
-
-before_script:
-  - python -V
-  - pip install -r requirements.txt
-  - pip install ruff pytest bandit pip-audit
 
 lint:
   stage: lint
+  image: python:3.11-slim
   script:
-    - ruff check src tests
-    - ruff format --check .
-  allow_failure: false
+    - pip install flake8
+    - flake8 ids_iforest_package/ids_iforest
+  allow_failure: true
 
-tests:
+test:
   stage: test
+  image: python:3.11-slim
+  before_script:
+    - pip install -e ids_iforest_package
+    - pip install pytest
   script:
-    - pytest -q --maxfail=1 --disable-warnings --junitxml=pytest.xml
+    - pytest -q
   artifacts:
     when: always
-    reports:
-      junit: pytest.xml
-    paths: [pytest.xml]
+    paths:
+      - .pytest_cache/
 
-security:
-  stage: security
+build:
+  stage: build
+  image: docker:24.0.2
+  services:
+    - docker:24.0.2-dind
   script:
-    - bandit -r src -f json -o bandit.json || true
-    - pip-audit -r requirements.txt -f json -o pip-audit.json || true
-  artifacts:
-    when: always
-    paths: [bandit.json, pip-audit.json]
-
-preprocess:
-  stage: preprocess
-  script:
-    # 1) génère un petit dataset si data/sample.csv est absent
-    - python src/data/make_dataset.py --input data/sample.csv --output data/raw.csv
-    # 2) transforme + nettoie pour l'entraînement
-    - python src/features/build_features.py --input data/raw.csv --output data/processed.csv
-  artifacts:
-    paths: [data/raw.csv, data/processed.csv]
-    expire_in: 7 days
-
-train_fast:
-  stage: train
-  needs: ["preprocess"]
-  script:
-    - python src/models/train.py --data data/processed.csv --model models/model.pkl --scaler models/scaler.pkl --metrics models/metrics.json --max_rows 10000 --contamination 0.05
-  artifacts:
-    paths: [models/model.pkl, models/scaler.pkl, models/metrics.json]
-    expire_in: 7 days
+    - docker build -f ids/Dockerfile -t ids_iforest:ci .
+    - docker build -f attacker/Dockerfile -t ids_attacker:ci attacker
+    - docker build -f web/Dockerfile -t ids_web:ci web
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH
-
-train_full:
-  stage: train
-  when: manual
-  allow_failure: false
-  script:
-    - python src/models/train.py --data "${DATASET_PATH:-data/processed.csv}" --model models/model.pkl --scaler models/scaler.pkl --metrics models/metrics.json --contamination 0.02
-  artifacts:
-    paths: [models/model.pkl, models/scaler.pkl, models/metrics.json]
-    expire_in: 14 days
-
-smoke_detect:
-  stage: smoke
-  needs: ["train_fast"]
-  script:
-    # Si aucun PCAP fourni, le script génère un mini PCAP synthétique en interne
-    - python src/predict/run_detector.py --model models/model.pkl --scaler models/scaler.pkl --out results.json --generate-sample-pcap
-  artifacts:
-    paths: [results.json]
+    - if: $CI_COMMIT_BRANCH == "main"

@@ -1,0 +1,23 @@
+2025-08-10 14:56:14,512 [INFO] server: Live detector started in background thread
+2025-08-10 14:56:14,515 [INFO] server: Starting web server on 0.0.0.0:5000
+2025-08-10 14:56:14,767 [INFO] server: Starting live capture on any with window 10s
+2025-08-10 14:56:25,860 [WARNING] server: [33mYELLOW[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40018 score=-0.020
+2025-08-10 14:56:25,861 [WARNING] server: [33mYELLOW[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40034 score=-0.013
+2025-08-10 14:56:25,862 [WARNING] server: [33mYELLOW[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40046 score=-0.010
+2025-08-10 14:56:25,862 [WARNING] server: [31mRED[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40056 score=-0.028
+2025-08-10 14:56:25,867 [WARNING] server: [33mYELLOW[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40066 score=-0.010
+2025-08-10 14:56:25,868 [WARNING] server: [31mRED[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40074 score=-0.032
+2025-08-10 14:56:25,869 [WARNING] server: [31mRED[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40076 score=-0.032
+2025-08-10 14:56:25,869 [WARNING] server: [33mYELLOW[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40082 score=-0.017
+2025-08-10 14:56:25,869 [WARNING] server: [31mRED[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40088 score=-0.032
+2025-08-10 14:56:25,869 [WARNING] server: [31mRED[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40104 score=-0.032
+2025-08-10 14:56:25,870 [WARNING] server: [33mYELLOW[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40114 score=-0.010
+2025-08-10 14:56:25,870 [WARNING] server: [33mYELLOW[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40124 score=-0.017
+2025-08-10 14:56:25,871 [WARNING] server: [31mRED[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40132 score=-0.023
+2025-08-10 14:56:25,871 [WARNING] server: [31mRED[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40142 score=-0.032
+2025-08-10 14:56:25,872 [WARNING] server: [31mRED[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40154 score=-0.032
+2025-08-10 14:56:25,872 [WARNING] server: [31mRED[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40158 score=-0.031
+2025-08-10 14:56:25,872 [WARNING] server: [31mRED[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40166 score=-0.032
+2025-08-10 14:56:25,873 [WARNING] server: [31mRED[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40168 score=-0.032
+2025-08-10 14:56:25,873 [WARNING] server: [31mRED[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40174 score=-0.032
+2025-08-10 14:56:25,874 [WARNING] server: [31mRED[0m anomaly: 127.0.0.1:5037 → 127.0.0.1:40182 score=-0.022

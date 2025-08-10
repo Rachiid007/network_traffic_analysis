@@ -1,0 +1,61 @@
+
+# SPDX-License-Identifier: MIT
+# Build system configuration for the ids_iforest Python package.  This file
+# uses the modern PEP 621 metadata layout and relies on the built‑in
+# setuptools backend to build and install the package.  See
+# https://packaging.python.org/ for details.
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ids-iforest"
+version = "0.1.0"
+description = "Network intrusion detection system based on Isolation Forest and PyShark"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+keywords = ["ids", "machine learning", "isolation forest", "network", "security"]
+authors = [
+  { name = "IDS IForest Maintainers", email = "maintainers@example.com" }
+]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Security",
+  "Topic :: System :: Networking",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research"
+]
+
+dependencies = [
+  "pyshark>=0.6.0",
+  "scikit-learn>=1.3.0",
+  "pandas>=2.0",
+  "numpy>=1.23,<2.0",
+  "pyyaml>=6.0",
+  "colorama>=0.4",
+  "joblib>=1.3",
+  "Flask>=3.0"
+]
+
+[project.scripts]
+ids-iforest-train = "ids_iforest.train:main"
+ids-iforest-detect = "ids_iforest.detect:main"
+ids-iforest-capture = "ids_iforest.capture:main"
+ids-iforest-pcap2csv = "ids_iforest.pcap2flows:main"
+ids-iforest-generate = "ids_iforest.scripts.generate_datasets:main"
+ids-iforest-server = "ids_iforest.server:main"
+
+# Explicitly map the ids_iforest package directory.  This prevents setuptools
+# from trying to interpret other top-level directories (such as `config`) as
+# packages.  See https://setuptools.pypa.io/en/latest/userguide/package_discovery.html
+[tool.setuptools]
+
+[tool.setuptools.packages.find]
+include = ["ids_iforest*"]
+
