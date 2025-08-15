@@ -1,0 +1,50 @@
+# One-time: pre-commit install
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+
+repos:
+  # Tiny, fast hygiene (won't block commit message from running)
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+      - id: check-yaml
+
+  # Enforce Conventional Commits when the message is created
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.2.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: ["--strict"]  # tighten as you like (e.g., require scope)
+
+  # Lint Python (same tool as your CI). Runs on pre-push so commits stay snappy.
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.1.1
+    hooks:
+      - id: flake8
+        stages: [pre-push]
+        args: ["--config=.flake8"]
+
+  # Lint shell scripts
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+        stages: [pre-push]
+
+  # Lint Dockerfiles
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint
+        stages: [pre-push]
+
+  # YAML style (syntax is already checked above)
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.37.1
+    hooks:
+      - id: yamllint
+        stages: [pre-push]
+        # Use your .yamllint config; avoid --strict if it's too noisy on Windows.
