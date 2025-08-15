@@ -59,4 +59,3 @@ ids-iforest-server = "ids_iforest.server:main"
 
 [tool.setuptools.packages.find]
 include = ["ids_iforest*"]
-

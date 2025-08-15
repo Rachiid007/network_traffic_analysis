@@ -114,11 +114,7 @@ victim web server on port 8080.  Alerts will be written to the
 
 ## Future work
 
-* Integration of real datasets such as CIC‑IDS 2017 for training
-  and evaluation.
-* Support for additional anomaly detection algorithms (One‑Class
-  SVM, autoencoders, etc.).
-* More sophisticated web UI with filtering and visualisation.
+* Monitoring with Grafana
 * Automated packaging and release pipeline.
 
 ## License
