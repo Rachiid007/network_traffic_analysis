@@ -1,11 +1,5 @@
-import os
-import pandas as pd
-
 from ids_iforest_package.ids_iforest.scripts.generate_datasets import (
     generate_dataset,
-    generate_benign,
-    generate_syn_flood,
-    generate_port_scan,
 )
 
 

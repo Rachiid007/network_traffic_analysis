@@ -27,7 +27,6 @@ services:
     cap_add:
       - NET_ADMIN
       - NET_RAW
-    # (Don't add 'ports:' here; it's not supported in container: mode per Docker docs)
 
   attacker:
     build:

@@ -9,11 +9,11 @@ training data from offline captures.
 from __future__ import annotations
 
 import argparse
-from typing import Dict, Any, Tuple, Iterable, Optional
+from typing import Dict, Any, Tuple, Optional
 
 try:
     import pyshark  # type: ignore
-except Exception as exc:
+except Exception:
     pyshark = None  # type: ignore
 
 import pandas as pd  # type: ignore
@@ -71,7 +71,9 @@ def pcap_to_dataframe(
 def main() -> None:
     """Entry point for ids-iforest-pcap2csv console script."""
     ap = argparse.ArgumentParser(description="Aggregate flows from a PCAP into a CSV")
-    ap.add_argument("--config", default="config/config.yml", help="Path to configuration YAML file")
+    ap.add_argument(
+        "--config", default="config/config.yml", help="Path to configuration YAML file"
+    )
     ap.add_argument("--pcap", required=True, help="PCAP file to process")
     ap.add_argument("--out", required=True, help="Output CSV file")
     args = ap.parse_args()

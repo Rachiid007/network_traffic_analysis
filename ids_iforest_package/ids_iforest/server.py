@@ -14,7 +14,6 @@ from __future__ import annotations
 import argparse
 import csv
 import threading
-import time
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -136,9 +135,13 @@ def main() -> None:
     This starts the live detector and the Flask web application.
     """
     ap = argparse.ArgumentParser(description="Start IDS detection and web UI")
-    ap.add_argument("--config", default="config/config.yml", help="Path to configuration YAML file")
     ap.add_argument(
-        "--no-detector", action="store_true", help="Do not start the live detector (UI only)"
+        "--config", default="config/config.yml", help="Path to configuration YAML file"
+    )
+    ap.add_argument(
+        "--no-detector",
+        action="store_true",
+        help="Do not start the live detector (UI only)",
     )
     ap.add_argument("--host", default="0.0.0.0", help="Host address for the web server")
     ap.add_argument("--port", type=int, default=5000, help="Port for the web server")
@@ -151,7 +154,9 @@ def main() -> None:
     alerts_csv = Path(cfg["logs_dir"]) / "alerts.csv"
     # Start detector unless disabled
     if not args.no_detector:
-        run_detector_thread(cfg, model, scaler, red_thr, yellow_thr, str(alerts_csv), logger)
+        run_detector_thread(
+            cfg, model, scaler, red_thr, yellow_thr, str(alerts_csv), logger
+        )
         logger.info("Live detector started in background thread")
     # Create Flask app
     app = Flask(__name__)

@@ -11,7 +11,6 @@ improved documentation.
 from __future__ import annotations
 
 import os
-import re
 import json
 import yaml
 import glob
@@ -31,9 +30,12 @@ except Exception:
     class _Dummy:
         def __getattr__(self, name: str) -> str:
             return ""
+
     Fore = Style = _Dummy()  # type: ignore[assignment]
+
     def colorama_init(autoreset: bool = True) -> None:
         return None
+
 
 import joblib
 
@@ -151,7 +153,9 @@ def get_git_hash(short: bool = True) -> str:
         return env_sha[:8] if short else env_sha
     try:
         sha = (
-            subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL)
+            subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
+            )
             .decode()
             .strip()
         )
@@ -186,13 +190,16 @@ def save_model(model: Any, scaler: Any, model_dir: str) -> Tuple[str, str]:
         pass
     try:
         import shutil
+
         shutil.copyfile(model_path, latest_path)
     except Exception:
         pass
     return model_path, latest_path
 
 
-def load_model(model_dir: str, explicit_file: Optional[str] = None) -> Tuple[Any, Any, str]:
+def load_model(
+    model_dir: str, explicit_file: Optional[str] = None
+) -> Tuple[Any, Any, str]:
     """Load a model and scaler from disk.
 
     If ``explicit_file`` is provided, load that file; otherwise load the
@@ -207,13 +214,20 @@ def load_model(model_dir: str, explicit_file: Optional[str] = None) -> Tuple[Any
     """
     path: Optional[str] = None
     if explicit_file:
-        path = explicit_file if os.path.isabs(explicit_file) else os.path.join(model_dir, explicit_file)
+        path = (
+            explicit_file
+            if os.path.isabs(explicit_file)
+            else os.path.join(model_dir, explicit_file)
+        )
     else:
         latest = os.path.join(model_dir, "ids_iforest_latest.joblib")
         if os.path.exists(latest):
             path = latest
         else:
-            cands = sorted(glob.glob(os.path.join(model_dir, "ids_iforest_*.joblib")), key=os.path.getmtime)
+            cands = sorted(
+                glob.glob(os.path.join(model_dir, "ids_iforest_*.joblib")),
+                key=os.path.getmtime,
+            )
             path = cands[-1] if cands else None
     if not path or not os.path.exists(path):
         raise FileNotFoundError(
@@ -243,6 +257,7 @@ def load_thresholds(model_dir: str) -> Tuple[float, float]:
 @dataclass(frozen=True)
 class Endpoint:
     """Representation of a network endpoint (IP address and port)."""
+
     ip: str
     port: int
 
@@ -253,7 +268,9 @@ def _endpoint_order(ep: Endpoint) -> Tuple[int, bytes, int]:
     return (ip_obj.version, ip_obj.packed, ep.port)
 
 
-def canonical_5tuple(src_ip: str, src_port: int, dst_ip: str, dst_port: int, proto: str) -> Tuple[Endpoint, Endpoint, str]:
+def canonical_5tuple(
+    src_ip: str, src_port: int, dst_ip: str, dst_port: int, proto: str
+) -> Tuple[Endpoint, Endpoint, str]:
     """Return a canonical ordering of the 5‑tuple (IP/port pair and protocol).
 
     The ordering is stable across IPv4/IPv6 and ensures that the same
@@ -350,7 +367,9 @@ def aggregate_packets_to_flows(
             first_ts = ts
         # Compute window index
         win_idx = int((ts - first_ts) // window_seconds)
-        key = canonical_5tuple(f["src_ip"], f["src_port"], f["dst_ip"], f["dst_port"], f["protocol"])
+        key = canonical_5tuple(
+            f["src_ip"], f["src_port"], f["dst_ip"], f["dst_port"], f["protocol"]
+        )
         fk = (win_idx, key)
         st = flows.get(fk)
         if st is None:
@@ -396,7 +415,11 @@ def flows_to_dataframe(
     """
     rows: List[Dict[str, Any]] = []
     for (win_idx, key), st in flows.items():
-        duration = max(0.0, st["last_ts"] - st["first_ts"]) if st["packets"] > 1 else (st["last_ts"] - st["first_ts"]) or 0.0
+        duration = (
+            max(0.0, st["last_ts"] - st["first_ts"])
+            if st["packets"] > 1
+            else (st["last_ts"] - st["first_ts"]) or 0.0
+        )
         mean_ps = float(np.mean(st["sizes"])) if st["sizes"] else 0.0
         std_ps = float(np.std(st["sizes"])) if st["sizes"] else 0.0
         iat_mean = float(np.mean(st["iat"])) if st["iat"] else 0.0
@@ -417,26 +440,45 @@ def flows_to_dataframe(
             "flow_duration": duration,
         }
         if feature_set == "extended":
-            row.update({
-                "tcp_syn_count": int(st["tcp_syn"]),
-                "tcp_fin_count": int(st["tcp_fin"]),
-                "tcp_rst_count": int(st["tcp_rst"]),
-                "iat_mean": iat_mean,
-                "iat_std": iat_std,
-                "bytes_per_packet": bpp,
-                "packets_per_second": pps,
-            })
+            row.update(
+                {
+                    "tcp_syn_count": int(st["tcp_syn"]),
+                    "tcp_fin_count": int(st["tcp_fin"]),
+                    "tcp_rst_count": int(st["tcp_rst"]),
+                    "iat_mean": iat_mean,
+                    "iat_std": iat_std,
+                    "bytes_per_packet": bpp,
+                    "packets_per_second": pps,
+                }
+            )
         rows.append(row)
     df = pd.DataFrame(rows)
     minimal_cols = [
-        "window", "src_ip", "dst_ip", "src_port", "dst_port", "protocol",
-        "bidirectional_packets", "bidirectional_bytes", "mean_packet_size", "std_packet_size", "flow_duration",
+        "window",
+        "src_ip",
+        "dst_ip",
+        "src_port",
+        "dst_port",
+        "protocol",
+        "bidirectional_packets",
+        "bidirectional_bytes",
+        "mean_packet_size",
+        "std_packet_size",
+        "flow_duration",
     ]
     extended_cols = minimal_cols + [
-        "tcp_syn_count", "tcp_fin_count", "tcp_rst_count", "iat_mean", "iat_std", "bytes_per_packet", "packets_per_second",
+        "tcp_syn_count",
+        "tcp_fin_count",
+        "tcp_rst_count",
+        "iat_mean",
+        "iat_std",
+        "bytes_per_packet",
+        "packets_per_second",
     ]
     if df.empty:
-        return pd.DataFrame(columns=extended_cols if feature_set == "extended" else minimal_cols)
+        return pd.DataFrame(
+            columns=extended_cols if feature_set == "extended" else minimal_cols
+        )
     return df[extended_cols if feature_set == "extended" else minimal_cols]
 
 

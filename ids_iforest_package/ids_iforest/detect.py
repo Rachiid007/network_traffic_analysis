@@ -29,12 +29,11 @@ import datetime as _dt
 import os
 from typing import Optional, Tuple, Dict, Any, Iterable
 
-import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
 
 try:
     import pyshark  # type: ignore
-except Exception as exc:  # pragma: no cover - pyshark is an optional dependency
+except Exception:  # pragma: no cover - pyshark is an optional dependency
     pyshark = None  # type: ignore
 
 from .utils import (
@@ -123,7 +122,9 @@ def _score_flows(
             yield level, alert
 
 
-def _write_alert_csv(alerts: Iterable[Tuple[str, Dict[str, Any]]], csv_path: str) -> None:
+def _write_alert_csv(
+    alerts: Iterable[Tuple[str, Dict[str, Any]]], csv_path: str
+) -> None:
     """Append alert rows to the CSV file designated by ``csv_path``.
 
     The CSV is created on first use and includes a header row.
@@ -237,20 +238,20 @@ def detect_from_pcap(
             # When the window index increases, flush previous windows
             if current_win is not None and win_idx > current_win:
                 # Extract flows for all completed windows and process
-                done_flows = {
-                    k: v
-                    for k, v in flows.items()
-                    if k[0] < win_idx
-                }
+                done_flows = {k: v for k, v in flows.items() if k[0] < win_idx}
                 if done_flows:
                     df = flows_to_dataframe(done_flows, feature_set)
-                    _process_dataframe(df, model, scaler, red_thr, yellow_thr, logger, alerts_csv)
+                    _process_dataframe(
+                        df, model, scaler, red_thr, yellow_thr, logger, alerts_csv
+                    )
                     # Remove processed windows
                     for k in list(done_flows.keys()):
                         flows.pop(k, None)
             current_win = win_idx
             # Aggregate packet
-            f = aggregate_packets_to_flows([pkt], window_seconds=window, base_ts=base_ts)
+            f = aggregate_packets_to_flows(
+                [pkt], window_seconds=window, base_ts=base_ts
+            )
             # Merge into flows dictionary
             for k, st in f.items():
                 # Merge sizes and stats
@@ -263,7 +264,7 @@ def detect_from_pcap(
                     existing["tcp_fin"] += st["tcp_fin"]
                     existing["tcp_rst"] += st["tcp_rst"]
                     # Update timestamps and IATs
-                    prev_ts = existing.get("last_ts")
+                    # prev_ts = existing.get("last_ts")
                     new_first = min(existing["first_ts"], st["first_ts"])
                     new_last = max(existing["last_ts"], st["last_ts"])
                     existing["first_ts"] = new_first
@@ -319,12 +320,16 @@ def detect_live(
                 done_flows = {k: v for k, v in flows.items() if k[0] < win_idx}
                 if done_flows:
                     df = flows_to_dataframe(done_flows, feature_set)
-                    _process_dataframe(df, model, scaler, red_thr, yellow_thr, logger, alerts_csv)
+                    _process_dataframe(
+                        df, model, scaler, red_thr, yellow_thr, logger, alerts_csv
+                    )
                     for k in list(done_flows.keys()):
                         flows.pop(k, None)
             current_win = win_idx
             # Aggregate this single packet into flows
-            f = aggregate_packets_to_flows([pkt], window_seconds=window, base_ts=base_ts)
+            f = aggregate_packets_to_flows(
+                [pkt], window_seconds=window, base_ts=base_ts
+            )
             for k, st in f.items():
                 if k in flows:
                     existing = flows[k]
@@ -347,7 +352,9 @@ def detect_live(
         # Flush remaining flows
         if flows:
             df = flows_to_dataframe(flows, feature_set)
-            _process_dataframe(df, model, scaler, red_thr, yellow_thr, logger, alerts_csv)
+            _process_dataframe(
+                df, model, scaler, red_thr, yellow_thr, logger, alerts_csv
+            )
 
 
 def main() -> None:
@@ -357,11 +364,23 @@ def main() -> None:
     file arguments, live capture is used.  A config file is required
     and defaults to ``config/config.yml`` if not specified.
     """
-    ap = argparse.ArgumentParser(description="Detect anomalies using a trained Isolation Forest model")
-    ap.add_argument("--config", default="config/config.yml", help="Path to configuration YAML file")
-    ap.add_argument("--pcap", help="Process flows from the specified PCAP file instead of live capture")
-    ap.add_argument("--csv", help="Process flows from the specified CSV file instead of live capture")
-    ap.add_argument("--model", help="Explicit model filename to load (overrides latest)")
+    ap = argparse.ArgumentParser(
+        description="Detect anomalies using a trained Isolation Forest model"
+    )
+    ap.add_argument(
+        "--config", default="config/config.yml", help="Path to configuration YAML file"
+    )
+    ap.add_argument(
+        "--pcap",
+        help="Process flows from the specified PCAP file instead of live capture",
+    )
+    ap.add_argument(
+        "--csv",
+        help="Process flows from the specified CSV file instead of live capture",
+    )
+    ap.add_argument(
+        "--model", help="Explicit model filename to load (overrides latest)"
+    )
     ap.add_argument(
         "--alerts-csv",
         default=None,
@@ -375,9 +394,13 @@ def main() -> None:
     alerts_csv = args.alerts_csv or os.path.join(cfg["logs_dir"], "alerts.csv")
     # Determine mode
     if args.csv:
-        detect_from_csv(args.csv, model, scaler, red_thr, yellow_thr, logger, alerts_csv)
+        detect_from_csv(
+            args.csv, model, scaler, red_thr, yellow_thr, logger, alerts_csv
+        )
     elif args.pcap:
-        detect_from_pcap(args.pcap, cfg, model, scaler, red_thr, yellow_thr, logger, alerts_csv)
+        detect_from_pcap(
+            args.pcap, cfg, model, scaler, red_thr, yellow_thr, logger, alerts_csv
+        )
     else:
         detect_live(cfg, model, scaler, red_thr, yellow_thr, logger, alerts_csv)
 

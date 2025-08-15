@@ -16,7 +16,7 @@ echo "Attacker started; targeting $TARGET_HOST:$TARGET_PORT"
 while true; do
     # Normal load test: sustain connections for 30 seconds
     echo "[*] Generating benign HTTP traffic with wrk"
-    wrk -c 8 -t 4 -d 30s http://$TARGET_HOST:$TARGET_PORT/ || true
+    wrk -c 8 -t 4 -d 30s "http://$TARGET_HOST:$TARGET_PORT/" || true
     # Sleep a random interval before the next attack burst (10–30 seconds)
     sleep $((10 + RANDOM % 20))
     # Launch a SYN flood for a short duration

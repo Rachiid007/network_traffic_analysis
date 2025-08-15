@@ -1,13 +1,9 @@
 import os
-import shutil
-import tempfile
 
-import pandas as pd
 
 from ids_iforest_package.ids_iforest.scripts.generate_datasets import generate_dataset
 from ids_iforest_package.ids_iforest.train import train
 from ids_iforest_package.ids_iforest.detect import (
-    detect_from_csv,
     _score_flows,  # internal function
 )
 from ids_iforest_package.ids_iforest.utils import load_model, load_thresholds

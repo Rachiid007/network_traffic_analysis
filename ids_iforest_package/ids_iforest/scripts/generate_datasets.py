@@ -26,7 +26,6 @@ import ipaddress
 import random
 from typing import List
 
-import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
 
 __all__ = ["main"]
@@ -71,7 +70,9 @@ def generate_benign(n: int) -> pd.DataFrame:
             "src_ip": _random_ip(True),
             "dst_ip": _random_ip(False),
             "src_port": random.randint(1025, 65535),
-            "dst_port": random.choice([80, 443, 22, 25, 53, 123]) if random.random() < 0.8 else random.randint(1, 65535),
+            "dst_port": random.choice([80, 443, 22, 25, 53, 123])
+            if random.random() < 0.8
+            else random.randint(1, 65535),
             "protocol": random.choice(["tcp", "udp"]),
             "bidirectional_packets": pkt_count,
             "bidirectional_bytes": total_bytes,
@@ -173,10 +174,16 @@ def generate_dataset(
 
 def main() -> None:
     """Entry point for ids-iforest-generate console script."""
-    ap = argparse.ArgumentParser(description="Generate synthetic training datasets for ids_iforest")
+    ap = argparse.ArgumentParser(
+        description="Generate synthetic training datasets for ids_iforest"
+    )
     ap.add_argument("--benign", type=int, default=1000, help="Number of benign flows")
-    ap.add_argument("--syn-flood", type=int, default=100, help="Number of SYN flood attack flows")
-    ap.add_argument("--port-scan", type=int, default=100, help="Number of port scan attack flows")
+    ap.add_argument(
+        "--syn-flood", type=int, default=100, help="Number of SYN flood attack flows"
+    )
+    ap.add_argument(
+        "--port-scan", type=int, default=100, help="Number of port scan attack flows"
+    )
     ap.add_argument("--out", required=True, help="Output CSV file path")
     args = ap.parse_args()
     df = generate_dataset(args.benign, args.syn_flood, args.port_scan)

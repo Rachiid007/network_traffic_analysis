@@ -20,13 +20,12 @@ Usage example::
 from __future__ import annotations
 
 import argparse
-import csv
 import time
-from typing import Optional, Dict, Tuple, Any, Iterable
+from typing import Optional, Dict, Tuple, Any
 
 try:
     import pyshark  # type: ignore
-except Exception as exc:  # pragma: no cover
+except Exception:  # pragma: no cover
     pyshark = None  # type: ignore
 
 import pandas as pd  # type: ignore
@@ -78,7 +77,9 @@ def capture_flows(
             if base_ts is None:
                 base_ts = ts
             # Aggregate this single packet
-            f = aggregate_packets_to_flows([pkt], window_seconds=window, base_ts=base_ts)
+            f = aggregate_packets_to_flows(
+                [pkt], window_seconds=window, base_ts=base_ts
+            )
             for k, st in f.items():
                 if k in flows:
                     existing = flows[k]
@@ -113,10 +114,18 @@ def write_dataset(df: pd.DataFrame, out_csv: str, label: Optional[int] = None) -
 
 def main() -> None:
     """Entry point for ids-iforest-capture console script."""
-    ap = argparse.ArgumentParser(description="Capture live packets and aggregate flows for training")
-    ap.add_argument("--config", default="config/config.yml", help="Path to configuration YAML file")
-    ap.add_argument("--minutes", type=float, default=1.0, help="Duration to capture in minutes")
-    ap.add_argument("--out", required=True, help="Output CSV path for the aggregated flows")
+    ap = argparse.ArgumentParser(
+        description="Capture live packets and aggregate flows for training"
+    )
+    ap.add_argument(
+        "--config", default="config/config.yml", help="Path to configuration YAML file"
+    )
+    ap.add_argument(
+        "--minutes", type=float, default=1.0, help="Duration to capture in minutes"
+    )
+    ap.add_argument(
+        "--out", required=True, help="Output CSV path for the aggregated flows"
+    )
     ap.add_argument(
         "--label",
         type=int,
