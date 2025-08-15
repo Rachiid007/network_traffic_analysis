@@ -50,7 +50,7 @@ ids-iforest-detect = "ids_iforest.detect:main"
 ids-iforest-capture = "ids_iforest.capture:main"
 ids-iforest-pcap2csv = "ids_iforest.pcap2flows:main"
 ids-iforest-generate = "ids_iforest.scripts.generate_datasets:main"
-ids-iforest-server = "ids_iforest.server:main"
+# ids-iforest-server = "ids_iforest.server:main" # I'm using Grafana now for monitoring
 
 # Explicitly map the ids_iforest package directory.  This prevents setuptools
 # from trying to interpret other top-level directories (such as `config`) as

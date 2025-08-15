@@ -34,4 +34,4 @@ else
 fi
 
 # Start the web server (which also runs the detector)
-exec ids-iforest-server --config "$CFG"
+exec ids-iforest-detect --config "$CFG"
