@@ -30,3 +30,9 @@
 2025-08-14 18:05:57,799 [INFO] server: Live detector started in background thread
 2025-08-14 18:05:57,803 [INFO] server: Starting web server on 0.0.0.0:5000
 2025-08-14 18:05:57,991 [INFO] server: Starting live capture on any with window 10s
+2025-08-15 14:08:31,022 [INFO] server: Live detector started in background thread
+2025-08-15 14:08:31,024 [INFO] server: Starting web server on 0.0.0.0:5000
+2025-08-15 14:08:31,293 [INFO] server: Starting live capture on any with window 10s
+2025-08-15 14:39:52,965 [INFO] server: Live detector started in background thread
+2025-08-15 14:39:52,975 [INFO] server: Starting web server on 0.0.0.0:5000
+2025-08-15 14:39:53,274 [INFO] server: Starting live capture on any with window 10s

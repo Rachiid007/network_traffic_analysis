@@ -1,0 +1,48 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: ids_alerts
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: ids_alerts
+          __path__: /var/ids-logs/alerts.csv
+    pipeline_stages:
+      # 1) drop the header row
+      - drop:
+          expression: "^timestamp,src_ip,dst_ip,src_port,dst_port,protocol,score,level$"
+      # 2) parse CSV into fields
+      - regex:
+          expression: '^(?P<timestamp>[^,]+),(?P<src_ip>[^,]+),(?P<dst_ip>[^,]+),(?P<src_port>[^,]+),(?P<dst_port>[^,]+),(?P<protocol>[^,]+),(?P<score>-?[0-9.]+),(?P<level>[^,]+)$'
+      # 3) set the log line timestamp from the "timestamp" column
+      - timestamp:
+          source: timestamp
+          format: '2006-01-02T15:04:05.999999'
+      # 4) attach useful labels for grouping in Grafana
+      - labels:
+          src_ip:
+          dst_ip:
+          protocol:
+          level:
+      # 5) convert the parsed CSV to a JSON log line (so `| json | unwrap score` works)
+      - template:
+          source: message
+          template: >
+            {"timestamp":"{{ .timestamp }}",
+             "src_ip":"{{ .src_ip }}",
+             "dst_ip":"{{ .dst_ip }}",
+             "src_port":{{ .src_port }},
+             "dst_port":{{ .dst_port }},
+             "protocol":"{{ .protocol }}",
+             "score":{{ .score }},
+             "level":"{{ .level }}"}
+      - output:
+          source: message

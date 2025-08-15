@@ -1,0 +1,136 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "iteration": 1723728000000,
+  "links": [],
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Alerts rate (logs/s)",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 6 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(rate({job=\"ids_alerts\"}[5m]))"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "RED alerts (logs/s)",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 6 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "B",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(rate({job=\"ids_alerts\", level=\"RED\"}[5m]))"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Alerts over time by level",
+      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 8 },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "refId": "C",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (level) (count_over_time({job=\"ids_alerts\"}[$__interval]))"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Average anomaly score (lower is worse)",
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 8 },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "refId": "D",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "avg_over_time({job=\"ids_alerts\"} | json | unwrap score [$__interval])"
+        }
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Top 10 source IPs (by alerts)",
+      "gridPos": { "x": 0, "y": 22, "w": 12, "h": 10 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        {
+          "refId": "E",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "topk(10, sum by (src_ip) (count_over_time({job=\"ids_alerts\"}[5m])))"
+        }
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Top 10 destination IPs (by alerts)",
+      "gridPos": { "x": 12, "y": 22, "w": 12, "h": 10 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        {
+          "refId": "F",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "topk(10, sum by (dst_ip) (count_over_time({job=\"ids_alerts\"}[5m])))"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Last 200 alerts",
+      "gridPos": { "x": 0, "y": 32, "w": 24, "h": 10 },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "G",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{job=\"ids_alerts\"} | json | line_format \"{{.timestamp}} {{.level}} {{.src_ip}}:{{.src_port}} -> {{.dst_ip}}:{{.dst_port}} score={{.score}} protocol={{.protocol}}\""
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["IDS", "IsolationForest"],
+  "templating": {
+    "list": [
+      {
+        "name": "level",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": "label_values({job=\"ids_alerts\"}, level)",
+        "includeAll": true,
+        "multi": true
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "Mini IDS (Isolation Forest)",
+  "uid": "ids-iforest"
+}
