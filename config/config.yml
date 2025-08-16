@@ -4,4 +4,4 @@ feature_set: extended
 contamination: 0.02
 model_dir: /app/models  # ./models
 logs_dir: /app/logs  # ./logs
-iface: "any"
+iface: "eth0"

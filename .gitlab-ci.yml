@@ -115,13 +115,15 @@ test:pytest:
 .build_docker_template: &build_docker
   image: docker:24.0.5
   services:
-    - docker:24.0.5-dind
+    - name: docker:24.0.5-dind
   variables:
     DOCKER_HOST: tcp://docker:2376
     DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_TLS_VERIFY: "1"
+    DOCKER_CERT_PATH: "/certs/client"
     DOCKER_DRIVER: overlay2
+    DOCKER_BUILDKIT: "1"
   before_script:
-    # Login with GitLab-provided per-job credentials
     - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
   artifacts:
     when: always

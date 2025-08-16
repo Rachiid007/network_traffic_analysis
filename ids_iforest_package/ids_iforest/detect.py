@@ -290,15 +290,14 @@ def detect_live(
     logger: Any,
     alerts_csv: str,
 ) -> None:
-    """Run live detection on the configured interface using PyShark.
-
-    A long‑running loop captures packets, aggregates flows in real time
-    and scores them when the window elapses.  Alerts are logged as they
-    occur.  The function blocks indefinitely until interrupted.
-    """
+    """Run live detection on the configured interface using PyShark."""
     if pyshark is None:
         raise RuntimeError("pyshark is not installed – cannot capture live packets")
+    # pick interface: if “any” fails to capture, fall back to eth0
     interface = cfg.get("iface", "eth0")
+    if interface == "any":
+        # inside a container, “any” often captures nothing, so use eth0
+        interface = "eth0"
     bpf_filter = cfg.get("bpf_filter", "tcp or udp")
     window = cfg["window_seconds"]
     feature_set = cfg.get("feature_set", "extended")

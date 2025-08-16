@@ -3,7 +3,8 @@ server:
   grpc_listen_port: 0
 
 positions:
-  filename: /run/promtail/positions/positions.yaml
+  # Use a flat file (avoid needing a 'positions' subdirectory that wasn't created in the volume)
+  filename: /run/promtail/positions.yaml
 
 clients:
   - url: http://loki:3100/loki/api/v1/push
@@ -43,30 +44,3 @@ scrape_configs:
              "level":"{{ .level }}"}
       - output:
           source: message
-
-  # scrape the JSON file for completeness (optional)
-  - job_name: ids_alerts_json
-    static_configs:
-      - targets: [localhost]
-        labels:
-          job: ids_alerts_json
-          __path__: /var/ids-logs/alerts.jsonl
-    pipeline_stages:
-      - json:
-          expressions:
-            ts: ts
-            src_ip: src_ip
-            dst_ip: dst_ip
-            src_port: src_port
-            dst_port: dst_port
-            protocol: protocol
-            score: score
-            level: level
-      - labels:
-          src_ip:
-          dst_ip:
-          protocol:
-          level:
-      - timestamp:
-          source: ts
-          format: RFC3339Nano
