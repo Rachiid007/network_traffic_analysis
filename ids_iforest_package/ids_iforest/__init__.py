@@ -2,9 +2,7 @@
 
 This package exposes utilities for capturing network packets, aggregating
 them into flows, extracting features and training/using an Isolation
-Forest model to detect anomalous network activity.  It also provides a
-simple web interface and a combined server that runs the detector and
-web UI concurrently.
+Forest model to detect anomalous network activity.
 
 The public API surface is intentionally minimal; most users will
 interact with the package via the console scripts defined in

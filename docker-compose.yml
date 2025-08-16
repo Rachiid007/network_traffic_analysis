@@ -22,8 +22,8 @@ services:
       IDS_CONFIG: /app/config/config.yml
     volumes:
       - ./config:/app/config:ro
-      - ./models:/app/models:ro         # pre-trained model
-      - ids-logs:/app/logs              # write alerts.csv and alerts.jsonl here
+      - ./models:/app/models         # pre-trained model
+      - ids-logs:/app/logs           # write alerts.csv and alerts.jsonl here
     cap_add:
       - NET_ADMIN
       - NET_RAW
