@@ -7,11 +7,15 @@ repos:
     rev: v6.0.0
     hooks:
       - id: end-of-file-fixer
+        stages: [commit]
+        exclude: ^(ids_iforest_package/ids_iforest\.egg-info/|config/logs/|data/|models/.*\.joblib)$
+      - id: mixed-line-ending
+        args: [--fix=lf]
+        stages: [commit]
+        exclude: ^(ids_iforest_package/ids_iforest\.egg-info/|config/logs/|data/|models/.*\.joblib)$
       - id: trailing-whitespace
       - id: check-merge-conflict
       - id: check-yaml
-      - id: mixed-line-ending
-        args: ["--fix=lf"]
 
   # Enforce Conventional Commits when the message is created
   - repo: https://github.com/compilerla/conventional-pre-commit

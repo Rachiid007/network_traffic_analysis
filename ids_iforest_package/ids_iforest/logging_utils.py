@@ -1,5 +1,8 @@
-import json, os, socket
+import json
+import os
+import socket
 from datetime import datetime, timezone
+
 
 def append_json_alert(path: str, **alert_fields) -> None:
     """Append alert_fields as a JSON line to `path`."""
