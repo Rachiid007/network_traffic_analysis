@@ -2,6 +2,13 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
 
 # --- Virtual environments (keep dependencies reproducible via requirements/pyproject)
 .venv/
@@ -51,12 +58,6 @@ data/processed/**
 !data/.gitkeep
 !data/processed/csecic2018_small.csv
 
-# --- Models (track JSON metadata, ignore trained binaries)
-models/**
-!models/*.json
-!models/README.md
-!models/.gitkeep
-
 # --- Local config & secrets
 *.local.*
 *.secret.*
@@ -88,3 +89,5 @@ docker-compose.override.yml
 reports/
 *.tmp
 *.swp
+
+ids_iforest_package/ids_iforest.egg-info/

@@ -62,6 +62,7 @@ services:
     volumes:
       - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
       - ./logs:/var/ids-logs:ro    # read alerts.csv produced by IDS
+      - promtail-positions:/run/promtail
     networks:
       - idsnet
 
@@ -92,3 +93,5 @@ networks:
 volumes:
   loki_data:
     driver: local
+  ids-logs:
+  promtail-positions:

@@ -84,10 +84,81 @@ def load_config(path: str) -> Dict[str, Any]:
     cfg.setdefault("iface", "eth0")
     # Resolve relative paths w.r.t the config file
     base = os.path.dirname(os.path.abspath(path))
+    # Allow environment variable overrides (highest precedence)
+    env_model = os.getenv("IDS_MODEL_DIR")
+    env_logs = os.getenv("IDS_LOGS_DIR")
+    if env_model:
+        cfg["model_dir"] = env_model
+    if env_logs:
+        cfg["logs_dir"] = env_logs
+
+    # First pass: resolve relative paths
     for key in ("model_dir", "logs_dir"):
         val = cfg.get(key)
         if isinstance(val, str) and not os.path.isabs(val):
             cfg[key] = os.path.abspath(os.path.join(base, val))
+
+    # Helper to test writability (directory may not yet exist)
+    def _writable(target: str) -> bool:
+        try:
+            os.makedirs(target, exist_ok=True)
+            test_file = os.path.join(target, ".writetest")
+            with open(test_file, "w", encoding="utf-8") as tf:
+                tf.write("ok")
+            os.remove(test_file)
+            return True
+        except Exception:
+            return False
+
+    # Detect if running inside a container (heuristic)
+    in_container = os.path.exists("/.dockerenv") or os.path.isfile("/proc/1/cgroup")
+
+    # Fallback strategy if resolved directory is not writable (e.g. config volume mounted read-only)
+    for key, default_rel in (("model_dir", "models"), ("logs_dir", "logs")):
+        cur = cfg.get(key)
+        if not isinstance(cur, str):
+            continue
+        # Special case: model_dir may be read-only but acceptable if it already contains a model file
+        if key == "model_dir":
+            try:
+                if os.path.isdir(cur):
+                    latest = os.path.join(cur, "ids_iforest_latest.joblib")
+                    any_model = bool(
+                        os.path.exists(latest)
+                        or glob.glob(os.path.join(cur, "ids_iforest_*.joblib"))
+                    )
+                    if any_model and os.access(cur, os.R_OK):
+                        # Keep as-is even if not writable
+                        continue
+            except Exception:
+                pass
+        if _writable(cur):
+            continue  # fine (read/write available)
+        # Build candidate list (ordered)
+        candidates: list[str] = []
+        # Preferred fixed paths inside container image
+        if in_container:
+            candidates.append(f"/app/{default_rel}")
+        # CWD relative fallback
+        candidates.append(os.path.abspath(os.path.join(os.getcwd(), default_rel)))
+        # User home fallback
+        home = os.path.expanduser("~")
+        candidates.append(os.path.join(home, ".ids_iforest", default_rel))
+        # Choose first writable
+        for cand in candidates:
+            if _writable(cand):
+                # Record fallback decision
+                fb = cfg.setdefault("_path_fallbacks", {})  # type: ignore[assignment]
+                fb[key] = {"original": cur, "chosen": cand}
+                try:
+                    print(
+                        f"[ids-iforest] WARNING: {key} '{cur}' not writable; using '{cand}'"
+                    )
+                except Exception:
+                    pass
+                cfg[key] = cand
+                break
+        # If none writable, leave as-is; later operations will raise a clearer error
     return cfg
 
 

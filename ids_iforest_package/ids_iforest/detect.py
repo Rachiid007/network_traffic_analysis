@@ -161,9 +161,6 @@ def _process_dataframe(
     csv_path: str,
 ) -> None:
     """Score flows in ``df`` and log any anomalies.
-
-    Both the logger and the alerts CSV are updated.  Anomalous flows
-    trigger colourised log output.
     """
     alerts = list(_score_flows(model, scaler, df, red_thr, yellow_thr))
     for level, alert in alerts:
@@ -173,6 +170,9 @@ def _process_dataframe(
             f"score={alert['score']:.3f}"
         )
     if alerts:
+        from .logging_utils import append_json_alert
+        for _, a in alerts:
+            append_json_alert(os.path.join(os.path.dirname(csv_path), "alerts.jsonl"), **a)
         _write_alert_csv(alerts, csv_path)
 
 

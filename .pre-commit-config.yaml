@@ -23,7 +23,7 @@ repos:
 
   # Lint Python (same tool as your CI). Runs on pre-push so commits stay snappy.
   - repo: https://github.com/pycqa/flake8
-    rev: 7.1.1
+    rev: 7.3.0
     hooks:
       - id: flake8
         stages: [pre-push]
@@ -38,7 +38,7 @@ repos:
 
   # Lint Dockerfiles
   - repo: https://github.com/hadolint/hadolint
-    rev: v2.12.0
+    rev: v2.13.1-beta
     hooks:
       - id: hadolint-docker
         stages: [pre-push]
