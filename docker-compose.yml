@@ -22,8 +22,8 @@ services:
       IDS_CONFIG: /app/config/config.yml
     volumes:
       - ./config:/app/config:ro
-      - ./models:/app/models:ro     # pre-trained model
-      - ./logs:/app/logs            # alerts.csv will be written here
+      - ./models:/app/models:ro         # pre-trained model
+      - ids-logs:/app/logs              # write alerts.csv and alerts.jsonl here
     cap_add:
       - NET_ADMIN
       - NET_RAW
@@ -61,8 +61,8 @@ services:
       - loki
     volumes:
       - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
-      - ./logs:/var/ids-logs:ro    # read alerts.csv produced by IDS
-      - promtail-positions:/run/promtail
+      - ids-logs:/var/ids-logs:ro  # read alerts.csv / alerts.jsonl from the same volume
+      - promtail-positions:/var/lib/promtail
     networks:
       - idsnet
 
@@ -91,7 +91,6 @@ networks:
     driver: bridge
 
 volumes:
-  loki_data:
-    driver: local
   ids-logs:
   promtail-positions:
+  loki_data:

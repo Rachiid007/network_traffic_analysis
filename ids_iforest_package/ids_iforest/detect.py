@@ -163,6 +163,8 @@ def _process_dataframe(
     """Score flows in ``df`` and log any anomalies.
     """
     alerts = list(_score_flows(model, scaler, df, red_thr, yellow_thr))
+    # Debug: log the number of flows and alerts per window
+    logger.info(f"Scored {len(df)} flows, produced {len(alerts)} alerts")
     for level, alert in alerts:
         colour = LEVEL_COLOR.get(level, level)
         logger.warning(

@@ -1,5 +1,5 @@
 # Dockerfile for the IDS service using the ids_iforest package
-FROM python:3.13
+FROM python:3.11
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \

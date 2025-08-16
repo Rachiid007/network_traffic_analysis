@@ -3,44 +3,63 @@ server:
   grpc_listen_port: 0
 
 positions:
-  # Use a flat file (avoid needing a 'positions' subdirectory that wasn't created in the volume)
-  filename: /run/promtail/positions.yaml
+  filename: /var/lib/promtail/positions.yaml   # mount this path as a volume
 
 clients:
   - url: http://loki:3100/loki/api/v1/push
 
 scrape_configs:
-  - job_name: ids_alerts
+  - job_name: ids_alerts_csv
     static_configs:
       - targets: [localhost]
         labels:
           job: ids_alerts
-          __path__: /var/ids-logs/alerts.csv
+          __path__: /var/ids-logs/alerts.csv   # make sure this exists in the promtail container
     pipeline_stages:
       - drop:
-          expression: '^timestamp,src_ip,dst_ip,src_port,dst_port,protocol,score,level$'
+          expression: '^(timestamp,src_ip,dst_ip,src_port,dst_port,protocol,score,level)\r?$'
       - regex:
-          # capture all CSV fields by name
-          expression: '^(?P<timestamp>[^,]+),(?P<src_ip>[^,]+),(?P<dst_ip>[^,]+),(?P<src_port>[^,]+),(?P<dst_port>[^,]+),(?P<protocol>[^,]+),(?P<score>-?[0-9.]+),(?P<level>[^,]+)$'
+          expression: '^(?P<timestamp>[^,]+),(?P<src_ip>[^,]+),(?P<dst_ip>[^,]+),(?P<src_port>\d+),(?P<dst_port>\d+),(?P<protocol>[^,]+),(?P<score>-?[0-9.]+),(?P<level>[^,]+)$'
       - timestamp:
           source: timestamp
           format: '2006-01-02T15:04:05.999999'
+          fallback_formats: ['2006-01-02 15:04:05', 'RFC3339', 'RFC3339Nano']
+          location: 'Europe/Brussels'
+          action_on_failure: skip
       - labels:
-          src_ip:
-          dst_ip:
           protocol:
           level:
-      # generate JSON log line so | json | unwrap score works in queries
       - template:
           source: message
           template: >
             {"timestamp":"{{ .timestamp }}",
-             "src_ip":"{{ .src_ip }}",
-             "dst_ip":"{{ .dst_ip }}",
-             "src_port":{{ .src_port }},
-             "dst_port":{{ .dst_port }},
-             "protocol":"{{ .protocol }}",
-             "score":{{ .score }},
+             "src_ip":"{{ .src_ip }}","dst_ip":"{{ .dst_ip }}",
+             "src_port":{{ .src_port }},"dst_port":{{ .dst_port }},
+             "protocol":"{{ .protocol }}","score":{{ .score }},
              "level":"{{ .level }}"}
       - output:
           source: message
+
+  - job_name: ids_alerts_jsonl
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: ids_alerts_json
+          __path__: /var/ids-logs/alerts.jsonl
+    pipeline_stages:
+      - json:
+          expressions:
+            ts: ts
+            src_ip: src_ip
+            dst_ip: dst_ip
+            src_port: src_port
+            dst_port: dst_port
+            protocol: protocol
+            score: score
+            level: level
+      - timestamp:
+          source: ts
+          format: RFC3339Nano
+      - labels:
+          protocol:
+          level:
