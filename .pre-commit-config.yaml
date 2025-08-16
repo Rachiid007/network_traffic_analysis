@@ -7,12 +7,12 @@ repos:
     rev: v6.0.0
     hooks:
       - id: end-of-file-fixer
-        stages: [commit]
-        exclude: ^(ids_iforest_package/ids_iforest\.egg-info/|config/logs/|data/|models/.*\.joblib)$
+        stages: [pre-commit]
+        exclude: ^(ids_iforest_package/ids_iforest\.egg-info/.*|config/logs/.*|logs/.*|data/.*|models/.*\.joblib)$
       - id: mixed-line-ending
         args: [--fix=lf]
-        stages: [commit]
-        exclude: ^(ids_iforest_package/ids_iforest\.egg-info/|config/logs/|data/|models/.*\.joblib)$
+        stages: [pre-commit]
+        exclude: ^(ids_iforest_package/ids_iforest\.egg-info/.*|config/logs/.*|logs/.*|data/.*|models/.*\.joblib)$
       - id: trailing-whitespace
       - id: check-merge-conflict
       - id: check-yaml
