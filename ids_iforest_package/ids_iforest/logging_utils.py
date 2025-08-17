@@ -1,32 +1,28 @@
 import os
 import json
 import datetime
-from typing import Dict, Any
+from typing import Any
 
 def append_json_alert(jsonl_path: str, **alert_data: Any) -> None:
     """
-    Append an alert to the JSONL file with proper formatting for Loki/Grafana.
-
-    Args:
-        jsonl_path: Path to the JSONL file
-        **alert_data: Alert data fields (score, src_ip, etc.)
+    Append an alert to the JSONL file (one JSON object per line) for Promtail/Loki.
     """
-    # Ensure directory exists
     os.makedirs(os.path.dirname(jsonl_path), exist_ok=True)
 
-    # Add timestamp if not present
     if "timestamp" not in alert_data:
-        alert_data["timestamp"] = datetime.datetime.now().isoformat()
+        alert_data["timestamp"] = datetime.datetime.utcnow().isoformat()
 
-    # Convert numeric types to strings for JSON serialization
-    for k, v in alert_data.items():
+    # Ensure pure-Python types for JSON (avoid numpy scalars)
+    for k, v in list(alert_data.items()):
         if isinstance(v, float):
-            alert_data[k] = float(v)  # Ensure proper float formatting
+            alert_data[k] = float(v)
+        elif isinstance(v, int):
+            alert_data[k] = int(v)
 
     try:
-        with open(jsonl_path, "a") as f:
-            json_line = json.dumps(alert_data)
-            f.write(json_line + "\n")
-            f.flush()  # Force write to disk
+        with open(jsonl_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(alert_data) + "\n")
+            f.flush()  # best-effort real-time tailing
     except Exception as e:
-        print(f"Error writing alert to {jsonl_path}: {e}")
+        # Fall back to stderr; don't crash the detector
+        print(f"[ids-iforest] Error writing alert to {jsonl_path}: {e}")

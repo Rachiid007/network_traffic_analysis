@@ -1,10 +1,9 @@
-"""Run detection on live traffic, a PCAP or a flows CSV file.
+"""Live anomaly detection using tshark (Docker/Windows friendly).
 
-- Live mode: capture via tshark line mode (robust in Docker/Windows), aggregate to flows, score, and flush periodically & on idle.
-- PCAP mode: parse via PyShark (unchanged).
-- CSV mode: unchanged.
-
-Alerts go to alerts.jsonl and alerts.csv in the configured logs_dir.
+- Captures packets via tshark in "fields" mode (no pyshark).
+- Aggregates packets into time-windowed flows.
+- Scores flows using a trained Isolation Forest + scaler.
+- Writes anomalies to alerts.jsonl (Grafana/Promtail) and alerts.csv.
 """
 
 from __future__ import annotations
@@ -12,7 +11,6 @@ from __future__ import annotations
 import argparse
 import csv
 import datetime as _dt
-import math
 import os
 import shutil
 import statistics as stats
@@ -23,18 +21,11 @@ from typing import Optional, Tuple, Dict, Any, Iterable, List
 
 import pandas as pd  # type: ignore
 
-# PyShark is optional: used only for PCAP path
-try:
-    import pyshark  # type: ignore
-except Exception:  # pragma: no cover
-    pyshark = None  # type: ignore
-
 from .utils import (
     load_config,
     get_logger,
     load_model,
     load_thresholds,
-    LEVEL_COLOR,
 )
 
 __all__ = ["main"]
@@ -98,7 +89,7 @@ def _score_flows(
 def _write_alert_csv(
     alerts: Iterable[Tuple[str, Dict[str, Any]]], csv_path: str
 ) -> None:
-    """Append alert rows to the CSV file."""
+    """Append alert rows to the CSV file (header on first write)."""
     os.makedirs(os.path.dirname(csv_path), exist_ok=True)
     exists = os.path.exists(csv_path)
     with open(csv_path, "a", newline="", encoding="utf-8") as f:
@@ -137,143 +128,31 @@ def _process_dataframe(
     json_path = os.path.join(os.path.dirname(csv_path), "alerts.jsonl")
     if alerts:
         from .logging_utils import append_json_alert  # local import to avoid cycles
-        for _, alert in alerts:
+        for level, alert in alerts:
             append_json_alert(json_path, **alert)
-        _write_alert_csv(alerts, csv_path)
-        logger.info(f"Wrote {len(alerts)} alerts to {csv_path} and {json_path}")
-
-
-# ---------------------------------
-# CSV & PCAP (unchanged semantics)
-# ---------------------------------
-def detect_from_csv(
-    csv_path: str,
-    model: Any,
-    scaler: Any,
-    red_thr: float,
-    yellow_thr: float,
-    logger: Any,
-    alerts_csv: str,
-) -> None:
-    """Run detection on a CSV of flows (columns like your flows DF)."""
-    df = pd.read_csv(csv_path)
-    if df.empty:
-        logger.info(f"No flows in CSV {csv_path}")
-        return
-    _process_dataframe(df, model, scaler, red_thr, yellow_thr, logger, alerts_csv)
-
-
-def detect_from_pcap(
-    pcap_path: str,
-    cfg: Dict[str, Any],
-    model: Any,
-    scaler: Any,
-    red_thr: float,
-    yellow_thr: float,
-    logger: Any,
-    alerts_csv: str,
-) -> None:
-    """Aggregate flows from a PCAP and run detection (streaming) via PyShark."""
-    if pyshark is None:
-        raise RuntimeError("pyshark is not installed – cannot process PCAPs")
-    cap = pyshark.FileCapture(
-        pcap_path,
-        only_summaries=False,
-        keep_packets=False,
-        decode_as={"tcp.port==80": "http"},
-    )
-    window = int(cfg["window_seconds"])
-    feature_set = cfg.get("feature_set", "extended")
-
-    # We aggregate into our simple structure then build a DF.
-    flows: Dict[Tuple[int, str, str, int, int, str], Dict[str, Any]] = {}
-    base_ts: Optional[float] = None
-    try:
-        for pkt in cap:
-            try:
-                ts = float(pkt.frame_info.time_epoch)
-                ip_src = getattr(pkt.ip, "src", None)
-                ip_dst = getattr(pkt.ip, "dst", None)
-            except Exception:
-                continue
-            if ip_src is None or ip_dst is None:
-                continue
-            proto = getattr(pkt, "transport_layer", None)
-            if proto not in ("TCP", "UDP"):
-                continue
-            if base_ts is None:
-                base_ts = ts
-            win_idx = int((ts - base_ts) // window)
-
-            if proto == "TCP":
-                try:
-                    sp = int(pkt.tcp.srcport)
-                    dp = int(pkt.tcp.dstport)
-                except Exception:
-                    continue
-                syn = int(getattr(pkt.tcp, "flags_syn", 0) or 0)
-                fin = int(getattr(pkt.tcp, "flags_fin", 0) or 0)
-                rst = int(getattr(pkt.tcp, "flags_reset", 0) or 0)
+            if level == "RED":
+                logger.error(
+                    f"ANOMALY RED {alert['src_ip']}:{alert['src_port']} -> "
+                    f"{alert['dst_ip']}:{alert['dst_port']} {alert['protocol'].upper()} "
+                    f"score={alert['score']:.4f}"
+                )
             else:
-                try:
-                    sp = int(pkt.udp.srcport)
-                    dp = int(pkt.udp.dstport)
-                except Exception:
-                    continue
-                syn = fin = rst = 0
-
-            try:
-                size = int(getattr(pkt.frame_info, "len", 0) or 0)
-            except Exception:
-                size = 0
-
-            key = (win_idx, ip_src, ip_dst, sp, dp, proto.lower())
-            st = flows.get(key)
-            if st is None:
-                st = flows[key] = {
-                    "src_ip": ip_src,
-                    "dst_ip": ip_dst,
-                    "src_port": sp,
-                    "dst_port": dp,
-                    "protocol": proto.lower(),
-                    "packets": 0,
-                    "bytes": 0,
-                    "sizes": [],  # for mean/std
-                    "tcp_syn": 0,
-                    "tcp_fin": 0,
-                    "tcp_rst": 0,
-                    "iat": [],
-                    "first_ts": ts,
-                    "last_ts": ts,
-                    "_last_ts": None,
-                }
-            st["packets"] += 1
-            st["bytes"] += size
-            st["sizes"].append(size)
-            if proto == "TCP":
-                st["tcp_syn"] += 1 if syn else 0
-                st["tcp_fin"] += 1 if fin else 0
-                st["tcp_rst"] += 1 if rst else 0
-            if st["_last_ts"] is not None:
-                st["iat"].append(max(0.0, ts - float(st["_last_ts"])))
-            st["_last_ts"] = ts
-            st["last_ts"] = ts
-    finally:
-        try:
-            cap.close()
-        except Exception:
-            pass
-
-    if flows:
-        df = _flows_to_df(flows, feature_set)
-        _process_dataframe(df, model, scaler, red_thr, yellow_thr, logger, alerts_csv)
+                logger.warning(
+                    f"Anomaly YELLOW {alert['src_ip']}:{alert['src_port']} -> "
+                    f"{alert['dst_ip']}:{alert['dst_port']} {alert['protocol'].upper()} "
+                    f"score={alert['score']:.4f}"
+                )
+        _write_alert_csv(alerts, csv_path)
+        logger.info(f"Wrote {len(alerts)} alert(s) to {csv_path} and {json_path}")
 
 
 # ------------------------------------------
 # Live detection via tshark (robust choice)
 # ------------------------------------------
-def _flows_to_df(flows: Dict[Tuple[int, str, str, int, int, str], Dict[str, Any]],
-                 feature_set: str) -> pd.DataFrame:
+def _flows_to_df(
+    flows: Dict[Tuple[int, str, str, int, int, str], Dict[str, Any]],
+    feature_set: str,
+) -> pd.DataFrame:
     """Build a pandas DF with the columns the model expects."""
     rows: List[Dict[str, Any]] = []
     for st in flows.values():
@@ -315,6 +194,23 @@ def _flows_to_df(flows: Dict[Tuple[int, str, str, int, int, str], Dict[str, Any]
     return pd.DataFrame(rows)
 
 
+def _flag_to_int(v: str) -> int:
+    """Coerce tshark boolean-like outputs ('True'/'False', '1'/'0', '') to 0/1."""
+    if v is None:
+        return 0
+    s = str(v).strip().lower()
+    if s in ("1", "true", "t", "yes", "y"):
+        return 1
+    if s in ("0", "false", "f", "no", "n", ""):
+        return 0
+    # Some tshark versions might emit numeric or hex-y values in odd cases;
+    # treat any nonzero integer as True.
+    try:
+        return 1 if int(s) != 0 else 0
+    except Exception:
+        return 0
+
+
 def detect_live(
     cfg: Dict[str, Any],
     model: Any,
@@ -324,12 +220,11 @@ def detect_live(
     logger: Any,
     alerts_csv: str,
 ) -> None:
-    """Run live detection using tshark streaming (no PyShark)."""
-    interface = cfg.get("iface", "eth0")
-    if interface == "any":
-        interface = "eth0"
+    """Run live detection using tshark streaming."""
+    # Interface selection: ENV takes precedence (Windows/Docker convenience)
+    interface = os.getenv("IFACE") or os.getenv("IDS_IFACE") or cfg.get("iface", "eth0")
     bpf_filter = cfg.get("bpf_filter", "tcp or udp")
-    window = int(cfg["window_seconds"])
+    window = int(cfg.get("window_seconds", 10))
     feature_set = cfg.get("feature_set", "extended")
 
     tshark_path = shutil.which("tshark")
@@ -341,9 +236,6 @@ def detect_live(
     os.makedirs(os.path.dirname(json_path), exist_ok=True)
     open(json_path, "a").close()
 
-    logger.info(f"Starting live capture on {interface} with window {window}s")
-
-    # tshark: line buffered (-l), fields we need, no DNS (-n)
     cmd = [
         tshark_path, "-n",
         "-i", interface,
@@ -361,10 +253,15 @@ def detect_live(
         "-e", "tcp.flags.syn", "-e", "tcp.flags.fin", "-e", "tcp.flags.reset",
     ]
 
+    logger.info(
+        f"Starting live capture on '{interface}' window={window}s filter=\"{bpf_filter}\"; "
+        f"tshark cmd={' '.join(cmd)}"
+    )
+
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,  # keep quiet; avoids deadlock on stderr
+        stderr=subprocess.STDOUT,  # show tshark errors in our logs
         text=True,
         bufsize=1,
         universal_newlines=True,
@@ -376,6 +273,11 @@ def detect_live(
     last_pkt_ts: Optional[float] = None
     lock = threading.Lock()
     stop = threading.Event()
+
+    # ingest stats
+    lines_total = 0
+    lines_parsed = 0
+    lines_skipped = 0
 
     def _flush(older_only: bool = True) -> None:
         """Flush buffered flows; if older_only, flush windows < current."""
@@ -397,27 +299,49 @@ def detect_live(
     def _flusher_loop() -> None:
         idle_timeout = max(2, window)      # flush everything if idle ≥ window
         tick = max(1, window // 2)         # run 2x per window
+        nonlocal lines_total, lines_parsed, lines_skipped
+        last_log = time.time()
         while not stop.is_set():
             time.sleep(tick)
             with lock:
                 has_flows = bool(flows)
                 lp = last_pkt_ts
-            if not has_flows:
-                continue
-            _flush(older_only=True)
+            if has_flows:
+                _flush(older_only=True)
             now = time.time()
             if lp and (now - lp) >= idle_timeout:
                 _flush(older_only=False)
+            # periodic ingest stats
+            if now - last_log >= max(5, window):
+                logger.info(
+                    f"Ingest stats: total_lines={lines_total} parsed={lines_parsed} "
+                    f"skipped={lines_skipped} active_flows={len(flows)}"
+                )
+                last_log = now
 
     flusher = threading.Thread(target=_flusher_loop, daemon=True)
     flusher.start()
 
     try:
         assert proc.stdout is not None
-        for line in proc.stdout:
-            parts = line.strip().split(",")
-            if len(parts) < 11:
+        for raw_line in proc.stdout:
+            line = raw_line.strip()
+            if not line:
                 continue
+            # TShark status/errors (keep visible)
+            if line.startswith("Capturing on"):
+                logger.info(line)
+                continue
+            if line.startswith("tshark:"):
+                logger.error(line)
+                continue
+
+            lines_total += 1
+            parts = line.split(",")
+            if len(parts) < 11:
+                lines_skipped += 1
+                continue
+
             try:
                 ts = float(parts[0]) if parts[0] else None
                 ip_src = parts[1] or None
@@ -427,12 +351,15 @@ def detect_live(
                 udp_sp = parts[5]
                 udp_dp = parts[6]
                 frame_len = int(parts[7] or 0)
-                syn = int(parts[8] or 0)
-                fin = int(parts[9] or 0)
-                rst = int(parts[10] or 0)
+                syn = _flag_to_int(parts[8])
+                fin = _flag_to_int(parts[9])
+                rst = _flag_to_int(parts[10])
             except Exception:
+                lines_skipped += 1
                 continue
+
             if ts is None or ip_src is None or ip_dst is None:
+                lines_skipped += 1
                 continue
 
             # Determine protocol & ports
@@ -444,6 +371,7 @@ def detect_live(
                     sp = int(tcp_sp or 0)
                     dp = int(tcp_dp or 0)
                 except Exception:
+                    lines_skipped += 1
                     continue
             elif udp_sp or udp_dp:
                 proto = "udp"
@@ -451,9 +379,11 @@ def detect_live(
                     sp = int(udp_sp or 0)
                     dp = int(udp_dp or 0)
                 except Exception:
+                    lines_skipped += 1
                     continue
             else:
-                continue  # ignore non-TCP/UDP (shouldn't happen due to BPF)
+                lines_skipped += 1
+                continue  # non-TCP/UDP (shouldn't happen due to BPF)
 
             with lock:
                 if base_ts is None:
@@ -484,6 +414,7 @@ def detect_live(
                     st["iat"].append(max(0.0, ts - float(st["_last_ts"])))
                 st["_last_ts"] = ts
                 st["last_ts"] = ts
+                lines_parsed += 1
     except KeyboardInterrupt:
         logger.info("Live detection interrupted by user")
     finally:
@@ -508,11 +439,9 @@ def detect_live(
 # -------------------------
 def main() -> None:
     ap = argparse.ArgumentParser(
-        description="Detect anomalies using a trained Isolation Forest model"
+        description="Detect anomalies using a trained Isolation Forest model (live only)"
     )
     ap.add_argument("--config", default="config/config.yml", help="Path to configuration YAML file")
-    ap.add_argument("--pcap", help="Process flows from the specified PCAP file instead of live capture")
-    ap.add_argument("--csv", help="Process flows from the specified CSV file instead of live capture")
     ap.add_argument("--model", help="Explicit model filename to load (overrides latest)")
     ap.add_argument("--alerts-csv", default=None,
                     help="Path to alerts CSV; defaults to <logs_dir>/alerts.csv from config")
@@ -541,13 +470,8 @@ def main() -> None:
     os.makedirs(os.path.dirname(alerts_csv), exist_ok=True)
     open(os.path.join(os.path.dirname(alerts_csv), "alerts.jsonl"), "a").close()
 
-    if args.csv:
-        detect_from_csv(args.csv, model, scaler, red_thr, yellow_thr, logger, alerts_csv)
-    elif args.pcap:
-        detect_from_pcap(args.pcap, cfg, model, scaler, red_thr, yellow_thr, logger, alerts_csv)
-    else:
-        detect_live(cfg, model, scaler, red_thr, yellow_thr, logger, alerts_csv)
+    detect_live(cfg, model, scaler, red_thr, yellow_thr, logger, alerts_csv)
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":
     main()
