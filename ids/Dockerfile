@@ -8,7 +8,7 @@ RUN apt-get update && \
         tcpdump \
         iproute2 \
         iputils-ping \
-        ca-certificates && \
+        ca-certificates nano && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -277,3 +277,14 @@ MIT – see `LICENSE`.
 Author: Rachid Bellaali. Isolation Forest, PyShark, Loki, Grafana are respective upstream projects; datasets like CSE‑CIC‑IDS 2018 belong to their creators.
 
 Happy experimenting & learning! 🚀
+
+pre-commit run --all-files
+
+
+# debug quicly why not generating alert json
+docker exec -it ids_iforest /bin/bash
+ids-iforest-generate --benign 50 --syn-flood 20 --port-scan 20 --out /tmp/synthetic.csv
+ids-iforest-detect --csv /tmp/synthetic.csv --config /app/config/config.yml --alerts-csv /app/logs/alerts.csv
+ls -l /app/logs
+echo "Last alerts:"; tail -n 5 /app/logs/alerts.jsonl || true
+cat /app/logs/alerts.jsonl

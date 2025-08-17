@@ -393,6 +393,12 @@ def main() -> None:
     model, scaler, _ = load_model(cfg["model_dir"], explicit_file=args.model)
     red_thr, yellow_thr = load_thresholds(cfg["model_dir"])
     alerts_csv = args.alerts_csv or os.path.join(cfg["logs_dir"], "alerts.csv")
+
+    # Ensure the JSONL file exists so Promtail can tail it
+    json_path = os.path.join(os.path.dirname(alerts_csv), "alerts.jsonl")
+    os.makedirs(os.path.dirname(json_path), exist_ok=True)
+    open(json_path, "a").close()
+
     # Determine mode
     if args.csv:
         detect_from_csv(
