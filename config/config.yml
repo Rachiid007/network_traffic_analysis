@@ -1,7 +1,12 @@
+# ids_iforest config
+logs_dir: /app/logs
+model_dir: /app/models
 window_seconds: 10
-bpf_filter: "tcp or udp"
 feature_set: extended
+
+# live capture
+iface: eth0                # detect.py will set 'any'->'eth0' anyway
+bpf_filter: "tcp or udp"
+
+# training defaults (used only if you run ids-iforest-train)
 contamination: 0.02
-model_dir: /app/models  # ./models
-logs_dir: /app/logs     # ./logs
-iface: "eth0"

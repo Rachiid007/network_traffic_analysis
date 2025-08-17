@@ -278,6 +278,7 @@ Author: Rachid Bellaali. Isolation Forest, PyShark, Loki, Grafana are respective
 
 Happy experimenting & learning! 🚀
 
+pre-commit run end-of-file-fixer --files <PATH to the file causing issues>
 pre-commit run --all-files
 
 

@@ -3,13 +3,13 @@ server:
   grpc_listen_port: 0
 
 positions:
-  filename: /var/lib/promtail/positions.yaml   # mount this path as a volume
+  filename: /tmp/positions.yaml
 
 clients:
   - url: http://loki:3100/loki/api/v1/push
 
 scrape_configs:
-  - job_name: ids_alerts_csv
+  - job_name: ids_alerts
     static_configs:
       - targets: [localhost]
         labels:
@@ -19,14 +19,16 @@ scrape_configs:
       - json:
           expressions:
             ts: ts
-            level: level
-            protocol: protocol
+            timestamp: timestamp
             src_ip: src_ip
             dst_ip: dst_ip
+            src_port: src_port
+            dst_port: dst_port
+            protocol: protocol
             score: score
+            level: level
       - labels:
           level:
-          protocol:
       - timestamp:
           source: ts
           format: RFC3339Nano
