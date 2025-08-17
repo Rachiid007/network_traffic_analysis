@@ -1,7 +1,7 @@
 # ids_iforest config
 logs_dir: /app/logs
 model_dir: /app/models
-window_seconds: 10
+window_seconds: 5
 feature_set: extended
 
 # live capture

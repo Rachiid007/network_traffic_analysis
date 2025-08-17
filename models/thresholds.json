@@ -1,4 +1,4 @@
 {
   "red_threshold": 0.05,
-  "yellow_threshold": 0.1
+  "yellow_threshold": "0.05"
 }

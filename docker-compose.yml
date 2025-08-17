@@ -1,6 +1,6 @@
 services:
 
-  ids:
+  ids_iforest:
     build:
       context: .
       dockerfile: ./services/ids/Dockerfile
@@ -9,12 +9,17 @@ services:
     network_mode: "service:web"   # <-- critical: see web's traffic
     depends_on:
       - web
+      - loki
+      - promtail
     environment:
       IDS_CONFIG: /app/config/config.yml
+      IFACE: eth0
+      IDS_YELLOW_THRESHOLD: "0.05"
     volumes:
-      - ./config:/app/config:ro
+      - ./config:/app/config
       - ./models:/app/models         # pre-trained model
       - ids-logs:/app/logs
+    # allow packet capture
     cap_add:
       - NET_ADMIN
       - NET_RAW
@@ -32,7 +37,7 @@ services:
       - idsnet
     depends_on:
       - web
-      - ids
+      - ids_iforest
       - promtail
       - loki
       - grafana

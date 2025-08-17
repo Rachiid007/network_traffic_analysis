@@ -1,28 +1,19 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-set -eu
+echo "Attacker started; targeting web:80"
 
-# Give time for web, promtail, loki, grafana, ids to come up
-sleep 15
+# A short warmup delay to let web & ids come up
+sleep 2
 
-# Target host and port; fall back to docker‑compose service names
-TARGET_HOST="${TARGET_HOST:-web}"
-TARGET_PORT="${TARGET_PORT:-80}"
+# 1) SYN flood for ~6s (no replies expected)
+timeout 6s hping3 -S -p 80 -i u100 web || true
 
-echo "Attacker started; targeting $TARGET_HOST:$TARGET_PORT"
+# 2) Port scan (fast)
+nmap -Pn -p 1-1024 web || true
 
-# Light SYN flood burst (short)
-# Requires NET_RAW; targets "web" service on 80
-hping3 -S -p 80 --faster --count 800 web || true
+# 3) HTTP load for ~8–10s
+ab -n 2000 -c 50 -k http://web/ || true
 
-# Quick port scan
-nmap -Pn -sS -T4 -p 1-1024 web || true
-
-# Some normal HTTP traffic (benign)
-ab -n 200 -c 10 http://web/ || true
-
-# Keep sending a little noise every minute
-while :; do
-  curl -s http://web/ >/dev/null || true
-  sleep 60
-done
+# Keep the container alive a little so IDS can flush windows
+sleep 5

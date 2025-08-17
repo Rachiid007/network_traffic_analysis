@@ -281,6 +281,7 @@ Happy experimenting & learning! 🚀
 pre-commit run end-of-file-fixer --files <PATH to the file causing issues>
 pre-commit run --all-files
 
+git push --no-verify
 
 # debug quicly why not generating alert json
 docker exec -it ids_iforest /bin/bash
