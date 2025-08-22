@@ -1,7 +1,7 @@
 # Include GitLab's security scanning templates for SAST (static code analysis) and secret detection
 include:
-  - template: Security/SAST.gitlab-ci.yml             # Enables Bandit, Semgrep, etc. for Python code:contentReference[oaicite:12]{index=12}
-  - template: Security/Secret-Detection.gitlab-ci.yml # Enables secret leak scanning with Gitleaks:contentReference[oaicite:13]{index=13}
+  - template: Security/SAST.gitlab-ci.yml             # Enables Bandit, Semgrep, etc. for Python code
+  - template: Security/Secret-Detection.gitlab-ci.yml # Enables secret leak scanning with Gitleaks
 
 stages:
   - test     # run tests and code analysis
@@ -14,15 +14,24 @@ unit_tests:
   stage: test
   image: python:3.10
   before_script:
-    - pip install --upgrade pip
-    - pip install pytest          # ensure pytest is available
-    - pip install -e ids_iforest_package/   # install the local package (and its dependencies)
+    - python -m pip install --upgrade pip wheel setuptools
+    # Install with binary dependencies to avoid compilation issues
+    - pip install --only-binary=numpy,scipy,pandas -e "ids_iforest_package/[test]"
+    # Install tshark (wireshark-cli) for more thorough testing if needed
+    - apt-get update -y && apt-get install -y tshark
   script:
-    - pytest ids_iforest_package/tests  -q  # run unit tests (quiet mode for brevity)
-  # You can enable artifact reports if needed (e.g., JUnit or coverage reports)
-  # artifacts:
-  #   reports:
-  #     junit: pytest-report.xml
+    # Run tests with pytest
+    - cd ids_iforest_package && python -m pytest -v -xvs
+    # Run tests with coverage
+    - python -m pytest -xvs --cov=ids_iforest --cov-report=xml --cov-report=term
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    paths:
+      - coverage.xml
+    expire_in: 1 week
 
 # (Note: SAST and Secret Detection jobs are automatically added by the include templates above.
 # They will run in this stage as well, scanning the code for vulnerabilities and secrets.)
@@ -61,8 +70,6 @@ build_service2:
     - docker push "$CI_REGISTRY_IMAGE/service2:${CI_COMMIT_SHORT_SHA}"
   only:
     - branches
-
-# (Repeat additional build jobs as needed for other service folders under `services/`.)
 
 # 3. Scan Stage – security scanning jobs
 dependency_scan:

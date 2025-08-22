@@ -283,6 +283,8 @@ pre-commit run --all-files
 
 git push --no-verify
 
+(Get-Content -Raw ids_iforest_package\pytest.ini) -replace "`r`n", "`n" | Set-Content -NoNewline ids_iforest_package\pytest.ini
+
 # debug quicly why not generating alert json
 docker exec -it ids_iforest /bin/bash
 ids-iforest-generate --benign 50 --syn-flood 20 --port-scan 20 --out /tmp/synthetic.csv

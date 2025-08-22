@@ -30,7 +30,7 @@ dependencies = [
   "pyshark>=0.6,<0.7",        # Live capture & PCAP via tshark
   "scikit-learn>=1.5,<1.8",   # IsolationForest, StandardScaler (Py 3.11 compatible)
   "pandas>=1.5,<3.0",         # CSV I/O & DataFrame ops
-  "numpy>=1.23,<2.0",         # Safe with scikit-learn 1.5 on Py 3.11
+  "numpy",                    # Compatible with scikit-learn
   "pyyaml>=6.0",              # Load config/config.yml
   "colorama>=0.4",            # Colored logging (gracefully degrades if absent)
   "joblib>=1.3",              # Model/scaler persistence
@@ -47,3 +47,29 @@ ids-iforest-generate= "ids_iforest.scripts.generate_datasets:main"
 [tool.setuptools]
 [tool.setuptools.packages.find]
 include = ["ids_iforest*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "--verbose --cov=ids_iforest --cov-report=xml --cov-report=term"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "pytest-xdist>=3.3.0",  # For parallel test execution
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "pytest-xdist>=3.3.0",  # For parallel test execution
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "build>=1.0.0",
+    "twine>=4.0.0",
+]
