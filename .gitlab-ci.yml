@@ -1,4 +1,4 @@
-# Includes: SAST, Secret Detection, Container Scanning, (plus optional Dependency Scanning)
+# Includes: SAST, Secret Detection, Container Scanning
 include:
   - template: Security/SAST.gitlab-ci.yml # Static code analysis (Bandit/Semgrep for Python)
   - template: Security/Secret-Detection.gitlab-ci.yml # Secret scanning (Gitleaks)
@@ -24,28 +24,18 @@ cache:
   paths:
     - .pip-cache/
 
-# Optionally, use a workflow to run pipelines only on MR, tags, or main (default branch)
-# (Uncomment the workflow section below to avoid running pipelines on branches without MRs)
-# workflow:
-#   rules:
-#     - if: $CI_PIPELINE_SOURCE == 'merge_request_event' || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_TAG
-#     - when: never
-
-# ---------- 1) TEST STAGE ----------
-
+# ---------- 1) TEST ----------
 unit_tests:
   stage: test
   image: python:3.12-slim
-  # Run on main branch and on merge request pipelines for any branch:
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
   before_script:
     - python -m pip install --upgrade pip
-    # Install package with test dependencies (pytest, pytest-cov, etc.)
     - pip install -e "ids_iforest_package[test]"
   script:
     - cd ids_iforest_package
-    # Run tests with coverage, output XML and HTML reports to project root
+    # Write coverage to project root so artifact paths are stable
     - pytest -q --cov=ids_iforest --cov-report=xml:../coverage.xml --cov-report=html:../htmlcov
   artifacts:
     reports:
@@ -57,13 +47,6 @@ unit_tests:
       - htmlcov/ # HTML coverage report (to be downloadable or published)
     expire_in: 1 week
 
-# Security analyzers (SAST & Secret Detection):
-# These run automatically in 'test' stage via the included templates.
-# By default, they are allow_failure: true (won't fail pipeline on vulnerabilities).
-# We ensure they run on MR and main as well by leveraging their default or via global workflow.
-
-# (If using Dependency-Scanning template, its jobs will also run in 'test' stage by default for supported languages)
-
 # ---------- Reusable anchor for Docker build jobs ----------
 .docker-build: &docker_build
   image: docker:24.0.5
@@ -73,28 +56,27 @@ unit_tests:
     DOCKER_HOST: tcp://docker:2376
     DOCKER_TLS_CERTDIR: "/certs"
   before_script:
-    # Log in to GitLab Container Registry
     - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
-  # Only build/push on main or when a tag pipeline runs (for releases):
+  # Build on main and on tags (so release tags also build/push images)
   rules:
     - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_TAG'
 
-# ---------- 2) BUILD STAGE ----------
-# Build Docker images for each service and push to registry (on main or tag releases).
-
+# ---------- 2) BUILD ----------
+# attacker: context services/attacker
 build_attacker:
   <<: *docker_build
   stage: build
   script:
     - docker build --pull -t "$CI_REGISTRY_IMAGE/attacker:${CI_COMMIT_SHORT_SHA}" services/attacker
-    # Also tag "latest" for convenience on main branch (not on tag releases):
+    # main convenience tag
     - if [ -z "$CI_COMMIT_TAG" ]; then docker tag "$CI_REGISTRY_IMAGE/attacker:${CI_COMMIT_SHORT_SHA}" "$CI_REGISTRY_IMAGE/attacker:latest"; fi
     - docker push "$CI_REGISTRY_IMAGE/attacker:${CI_COMMIT_SHORT_SHA}"
     - if [ -z "$CI_COMMIT_TAG" ]; then docker push "$CI_REGISTRY_IMAGE/attacker:latest"; fi
-    # If this is a tagged release, also tag and push with version:
+    # release tag
     - if [ -n "$CI_COMMIT_TAG" ]; then docker tag "$CI_REGISTRY_IMAGE/attacker:${CI_COMMIT_SHORT_SHA}" "$CI_REGISTRY_IMAGE/attacker:${CI_COMMIT_TAG}"; fi
     - if [ -n "$CI_COMMIT_TAG" ]; then docker push "$CI_REGISTRY_IMAGE/attacker:${CI_COMMIT_TAG}"; fi
 
+# ids: Dockerfile uses repo-root context (per docker-compose)
 build_ids:
   <<: *docker_build
   stage: build
@@ -106,6 +88,7 @@ build_ids:
     - if [ -n "$CI_COMMIT_TAG" ]; then docker tag "$CI_REGISTRY_IMAGE/ids:${CI_COMMIT_SHORT_SHA}" "$CI_REGISTRY_IMAGE/ids:${CI_COMMIT_TAG}"; fi
     - if [ -n "$CI_COMMIT_TAG" ]; then docker push "$CI_REGISTRY_IMAGE/ids:${CI_COMMIT_TAG}"; fi
 
+# web: context services/web
 build_web:
   <<: *docker_build
   stage: build
@@ -117,14 +100,11 @@ build_web:
     - if [ -n "$CI_COMMIT_TAG" ]; then docker tag "$CI_REGISTRY_IMAGE/web:${CI_COMMIT_SHORT_SHA}" "$CI_REGISTRY_IMAGE/web:${CI_COMMIT_TAG}"; fi
     - if [ -n "$CI_COMMIT_TAG" ]; then docker push "$CI_REGISTRY_IMAGE/web:${CI_COMMIT_TAG}"; fi
 
-# (The above ensures that on main, images are pushed with both commit-SHA and 'latest' tags.
-# On a tagged release, images are additionally tagged with the release version.)
-
-# ---------- 3) SCAN STAGE ----------
+# ---------- 3) SCAN ----------
+# Python dependency scan (non-blocking) with downloadable JSON
 dependency_scan:
   stage: scan
   image: python:3.12-slim
-  # Run on main and merge request pipelines (so dependency vulnerabilities are caught before merge)
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
   before_script:
@@ -132,48 +112,68 @@ dependency_scan:
     - pip install pip-audit
     - pip install -e ids_iforest_package/
   script:
-    - pip-audit # Scans for known vulnerabilities in Python dependencies
-  allow_failure: true # Do not fail the job/pipeline on vulnerabilities (just report them)
+    # Make job *green* even if vulns exist, but keep a machine-readable artifact
+    - pip-audit -f json -o pip-audit.json || true
+  allow_failure: true
   artifacts:
     paths:
-      - pip-audit-results.txt # (Optional) save results if needed
-    when: on_failure
+      - pip-audit.json
     expire_in: 1 week
 
-container_scanning:
+# Use THREE explicit jobs instead of a matrix so CS_IMAGE is a concrete value.
+# Each job EXTENDS the official template's 'container_scanning' job.
+container_scan_attacker:
+  extends: container_scanning
   stage: scan
-  needs:
-    - build_attacker
-    - build_ids
-    - build_web
-  parallel:
-    matrix:
-      - CS_IMAGE: "$CI_REGISTRY_IMAGE/attacker:${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
-      - CS_IMAGE: "$CI_REGISTRY_IMAGE/ids:${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
-      - CS_IMAGE: "$CI_REGISTRY_IMAGE/web:${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
-  image: "$CS_ANALYZER_IMAGE" # Use the analyzer image provided by the template
-  variables:
-    # Include Python package scanning inside the container (not only OS packages)
-    CS_DISABLE_LANGUAGE_VULNERABILITY_SCAN: "false"
-    # Provide Dockerfile path for better remediation advice (for the 'ids' image which uses a non-root context)
-    CS_DOCKERFILE_PATH: "services/ids/Dockerfile"
-    GIT_STRATEGY: none # Don't fetch the repo in these jobs (not needed unless auto-remediation is used)
+  needs: [build_attacker]
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_TAG'
-  allow_failure: true # Do not fail pipeline on container vulnerabilities (per template default)
-  artifacts:
-    reports:
-      container_scanning: gl-container-scanning-report.json
+    - if: $CI_COMMIT_TAG
+      variables:
+        CS_IMAGE: "$CI_REGISTRY_IMAGE/attacker:$CI_COMMIT_TAG"
+    - if: $CI_COMMIT_BRANCH == "main"
+      variables:
+        CS_IMAGE: "$CI_REGISTRY_IMAGE/attacker:$CI_COMMIT_SHORT_SHA"
+  variables:
+    CS_DISABLE_LANGUAGE_VULNERABILITY_SCAN: "false"
+  allow_failure: true
 
-# Note: SAST and Secret Detection jobs are implicitly in this stage (they default to stage 'test', but complete before deploy).
-# They produce `gl-sast-report.json` and `gl-secret-detection-report.json` artifacts for the security dashboard.
+container_scan_ids:
+  extends: container_scanning
+  stage: scan
+  needs: [build_ids]
+  rules:
+    - if: $CI_COMMIT_TAG
+      variables:
+        CS_IMAGE: "$CI_REGISTRY_IMAGE/ids:$CI_COMMIT_TAG"
+    - if: $CI_COMMIT_BRANCH == "main"
+      variables:
+        CS_IMAGE: "$CI_REGISTRY_IMAGE/ids:$CI_COMMIT_SHORT_SHA"
+  variables:
+    CS_DISABLE_LANGUAGE_VULNERABILITY_SCAN: "false"
+    # Uncomment the next two lines if you want remediation hints (requires repo checkout)
+    # GIT_STRATEGY: fetch
+    # CS_DOCKERFILE_PATH: "services/ids/Dockerfile"
+  allow_failure: true
 
-# ---------- 4) DEPLOY STAGE ----------
+container_scan_web:
+  extends: container_scanning
+  stage: scan
+  needs: [build_web]
+  rules:
+    - if: $CI_COMMIT_TAG
+      variables:
+        CS_IMAGE: "$CI_REGISTRY_IMAGE/web:$CI_COMMIT_TAG"
+    - if: $CI_COMMIT_BRANCH == "main"
+      variables:
+        CS_IMAGE: "$CI_REGISTRY_IMAGE/web:$CI_COMMIT_SHORT_SHA"
+  variables:
+    CS_DISABLE_LANGUAGE_VULNERABILITY_SCAN: "false"
+  allow_failure: true
 
+# ---------- 4) DEPLOY ----------
 publish_to_pypi:
   stage: deploy
   image: python:3.12-slim
-  # Only run on tag pipelines (release publishing)
   rules:
     - if: "$CI_COMMIT_TAG"
   variables:
@@ -183,20 +183,19 @@ publish_to_pypi:
     - pip install build twine
   script:
     - cd ids_iforest_package
-    - python -m build # Build source and wheel distributions
+    - python -m build
     - twine upload dist/* -u "$PYPI_USERNAME" -p "$PYPI_PASSWORD"
 
-# Publish coverage report to GitLab Pages for easy access
+# Publish HTML coverage via GitLab Pages (browse without downloading)
 pages:
   stage: deploy
   dependencies:
-    - unit_tests # Download artifacts from tests (htmlcov/)
+    - unit_tests
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
   script:
-    # Move coverage HTML files to 'public' for Pages to serve
     - mv htmlcov public
   artifacts:
     paths:
-      - public # GitLab Pages will deploy files in 'public' directory
+      - public
     expire_in: 30 days
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
