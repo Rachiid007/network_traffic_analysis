@@ -1,10 +1,8 @@
 # Includes: SAST, Secret Detection, Container Scanning
 include:
-  - template: Security/SAST.gitlab-ci.yml # Static code analysis (Bandit/Semgrep for Python)
+  - template: Security/SAST.gitlab-ci.yml            # Python SAST (Bandit/Semgrep)
   - template: Security/Secret-Detection.gitlab-ci.yml # Secret scanning (Gitleaks)
-  - template: Jobs/Container-Scanning.gitlab-ci.yml # Container vulnerability scanning
-# Optionally include Dependency Scanning template:
-#  - template: Security/Dependency-Scanning.gitlab-ci.yml
+  - template: Jobs/Container-Scanning.gitlab-ci.yml   # Trivy-based container scanning
 
 stages:
   - test
@@ -16,10 +14,7 @@ stages:
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
   DOCKER_DRIVER: overlay2
-  DOCKER_BUILDKIT: 1 # Enable Docker BuildKit for faster caching
-  # CS_DISABLE_LANGUAGE_VULNERABILITY_SCAN, CS_DOCKERFILE_PATH, etc., will be set in the container_scanning job.
-  CS_DISABLE_LANGUAGE_VULNERABILITY_SCAN: "false" #scan stage
-  GIT_STRATEGY: fetch #scan stage
+  DOCKER_BUILDKIT: "1"     # Faster Docker builds
 
 cache:
   key: "pip-cache"
@@ -37,16 +32,16 @@ unit_tests:
     - pip install -e "ids_iforest_package[test]"
   script:
     - cd ids_iforest_package
-    # Write coverage to project root so artifact paths are stable
+    # Write coverage to repo root so artifact paths are stable
     - pytest -q --cov=ids_iforest --cov-report=xml:../coverage.xml --cov-report=html:../htmlcov
   artifacts:
     reports:
       coverage_report:
         coverage_format: cobertura
-        path: coverage.xml # Cobertura XML for GitLab coverage visualization
+        path: coverage.xml
     paths:
       - coverage.xml
-      - htmlcov/ # HTML coverage report (to be downloadable or published)
+      - htmlcov/
     expire_in: 1 week
 
 # ---------- Reusable anchor for Docker build jobs ----------
@@ -113,6 +108,7 @@ container_scanning:
   rules:
     - when: never
 
+# Base for our three image scans; inherits analyzer and sets artifacts cleanly.
 .container-scan-base:
   extends: container_scanning
   stage: scan
@@ -123,46 +119,84 @@ container_scanning:
       - runner_system_failure
       - scheduler_failure
       - data_integrity_failure
-  allow_failure: true
+  allow_failure: true         # keep pipeline green even with findings (as requested)
+  variables:
+    CS_DISABLE_LANGUAGE_VULNERABILITY_SCAN: "false"   # include Python packages found in images
+  artifacts:
+    reports:
+      container_scanning: gl-container-scanning-report.json
+      cyclonedx: "**/gl-sbom-*.cdx.json"
+    paths:
+      - gl-container-scanning-report.json
+      - "**/gl-sbom-*.cdx.json"
 
-# Use THREE explicit jobs instead of a matrix so CS_IMAGE is a concrete value.
-# Each job EXTENDS the official template's 'container_scanning' job.
+# Each job scans a concrete image:tag that we built and pushed above.
 container_scan_attacker:
   extends: .container-scan-base
   needs: [build_attacker]
   rules:
+    - if: '$CI_COMMIT_TAG'
+      variables:
+        CS_IMAGE: "$CI_REGISTRY_IMAGE/attacker:$CI_COMMIT_TAG"
     - if: '$CI_COMMIT_BRANCH == "main"'
       variables:
         CS_IMAGE: "$CI_REGISTRY_IMAGE/attacker:$CI_COMMIT_SHORT_SHA"
   variables:
+    GIT_STRATEGY: fetch
     CS_DOCKERFILE_PATH: "services/attacker/Dockerfile"
 
 container_scan_ids:
   extends: .container-scan-base
   needs: [build_ids]
   rules:
+    - if: '$CI_COMMIT_TAG'
+      variables:
+        CS_IMAGE: "$CI_REGISTRY_IMAGE/ids:$CI_COMMIT_TAG"
     - if: '$CI_COMMIT_BRANCH == "main"'
       variables:
         CS_IMAGE: "$CI_REGISTRY_IMAGE/ids:$CI_COMMIT_SHORT_SHA"
   variables:
+    GIT_STRATEGY: fetch
     CS_DOCKERFILE_PATH: "services/ids/Dockerfile"
 
 container_scan_web:
   extends: .container-scan-base
   needs: [build_web]
   rules:
+    - if: '$CI_COMMIT_TAG'
+      variables:
+        CS_IMAGE: "$CI_REGISTRY_IMAGE/web:$CI_COMMIT_TAG"
     - if: '$CI_COMMIT_BRANCH == "main"'
       variables:
         CS_IMAGE: "$CI_REGISTRY_IMAGE/web:$CI_COMMIT_SHORT_SHA"
   variables:
+    GIT_STRATEGY: fetch
     CS_DOCKERFILE_PATH: "services/web/Dockerfile"
+
+# Python dependency audit (non-blocking) with downloadable JSON
+dependency_scan:
+  stage: scan
+  image: python:3.12-slim
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  before_script:
+    - python -m pip install --upgrade pip
+    - pip install pip-audit
+    - pip install -e ids_iforest_package/
+  script:
+    - pip-audit -f json -o pip-audit.json || true
+  allow_failure: true
+  artifacts:
+    paths:
+      - pip-audit.json
+    expire_in: 1 week
 
 # ---------- 4) DEPLOY ----------
 publish_to_pypi:
   stage: deploy
   image: python:3.12-slim
   rules:
-    - if: "$CI_COMMIT_TAG"     # publish on a tag only
+    - if: "$CI_COMMIT_TAG"     # publish on a tag only (create a tag on main)
   variables:
     PIP_DISABLE_PIP_VERSION_CHECK: "1"
   before_script:
@@ -173,7 +207,7 @@ publish_to_pypi:
     - python -m build
     - twine upload dist/* -u "$PYPI_USERNAME" -p "$PYPI_PASSWORD"
 
-# Publish HTML coverage via GitLab Pages
+# Publish HTML coverage via GitLab Pages (browse without downloading)
 pages:
   stage: deploy
   dependencies:
