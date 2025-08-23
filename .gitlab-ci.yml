@@ -37,26 +37,24 @@ unit_tests:
 # They will run in this stage as well, scanning the code for vulnerabilities and secrets.)
 
 # 2. Build Stage – one job per service container
-build_service1:
+build_attacker:
   stage: build
-  image: docker:24.0.5               # Docker client image
+  image: docker:24.0.5
   services:
-    - docker:24.0.5-dind             # Docker daemon (Docker-in-Docker) service
+    - docker:24.0.5-dind
   variables:
-    # Enable Docker TLS (GitLab runner default) and configure docker host
     DOCKER_HOST: tcp://docker:2376
     DOCKER_TLS_CERTDIR: "/certs"
   script:
     # Authenticate to GitLab Container Registry
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u "$CI_REGISTRY_USER" --password-stdin
-    # Build the Docker image for service1 and tag it with commit SHA
-    - docker build -t "$CI_REGISTRY_IMAGE/service1:${CI_COMMIT_SHORT_SHA}" services/service1
-    # Push the image to the registry
-    - docker push "$CI_REGISTRY_IMAGE/service1:${CI_COMMIT_SHORT_SHA}"
+    # Build and push the "attacker" service image
+    - docker build -t "$CI_REGISTRY_IMAGE/attacker:${CI_COMMIT_SHORT_SHA}" services/attacker
+    - docker push "$CI_REGISTRY_IMAGE/attacker:${CI_COMMIT_SHORT_SHA}"
   only:
-    - branches   # run on all branch commits (adjust as needed)
+    - branches   # run on all branch commits
 
-build_service2:
+build_ids:
   stage: build
   image: docker:24.0.5
   services:
@@ -66,8 +64,25 @@ build_service2:
     DOCKER_TLS_CERTDIR: "/certs"
   script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u "$CI_REGISTRY_USER" --password-stdin
-    - docker build -t "$CI_REGISTRY_IMAGE/service2:${CI_COMMIT_SHORT_SHA}" services/service2
-    - docker push "$CI_REGISTRY_IMAGE/service2:${CI_COMMIT_SHORT_SHA}"
+    # Build and push the "ids" service image
+    - docker build -t "$CI_REGISTRY_IMAGE/ids:${CI_COMMIT_SHORT_SHA}" services/ids
+    - docker push "$CI_REGISTRY_IMAGE/ids:${CI_COMMIT_SHORT_SHA}"
+  only:
+    - branches
+
+build_web:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u "$CI_REGISTRY_USER" --password-stdin
+    # Build and push the "web" service image
+    - docker build -t "$CI_REGISTRY_IMAGE/web:${CI_COMMIT_SHORT_SHA}" services/web
+    - docker push "$CI_REGISTRY_IMAGE/web:${CI_COMMIT_SHORT_SHA}"
   only:
     - branches
 
@@ -86,22 +101,26 @@ dependency_scan:
 
 scan_images:
   stage: scan
-  image: aquasec/trivy:latest        # Trivy security scanner for container images
+  image: aquasec/trivy:latest
   services:
     - docker:24.0.5-dind
   variables:
     DOCKER_HOST: tcp://docker:2376
     DOCKER_TLS_CERTDIR: "/certs"
-  allow_failure: false               # fail if high/critical vulns are found
+  allow_failure: false
   script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u "$CI_REGISTRY_USER" --password-stdin
-    # Loop through each service directory and scan its image
+    # Loop through each service directory and scan its image (skip if no Dockerfile)
     - |
       for service_dir in $(ls services); do
-        echo "Scanning image for $service_dir ..."
-        docker pull "$CI_REGISTRY_IMAGE/${service_dir}:${CI_COMMIT_SHORT_SHA}"  || exit $?
-        # Scan image and fail if any HIGH or CRITICAL vulnerabilities are found
-        trivy image --exit-code 1 --severity HIGH,CRITICAL "$CI_REGISTRY_IMAGE/${service_dir}:${CI_COMMIT_SHORT_SHA}" || exit $?
+        if [ -f "services/$service_dir/Dockerfile" ]; then
+          echo "Scanning image for $service_dir..."
+          docker pull "$CI_REGISTRY_IMAGE/${service_dir}:${CI_COMMIT_SHORT_SHA}" || exit $?
+          # Fail the job if any HIGH or CRITICAL vulnerabilities are found
+          trivy image --exit-code 1 --severity HIGH,CRITICAL "$CI_REGISTRY_IMAGE/${service_dir}:${CI_COMMIT_SHORT_SHA}" || exit $?
+        else
+          echo "Skipping $service_dir (no Dockerfile present; no image to scan)."
+        fi
       done
 
 # 4. Deploy Stage – publish package to PyPI (runs on tagged commits)
