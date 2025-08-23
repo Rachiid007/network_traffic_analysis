@@ -27,20 +27,20 @@ unit_tests:
     - if: '$CI_COMMIT_BRANCH == "main"'
   before_script:
     - python -m pip install --upgrade pip
-    # Install your package in editable mode with test extras (pytest, pytest-cov, etc.)
+    # Install your package with its test extras (pytest, pytest-cov, etc.)
     - pip install -e "ids_iforest_package[test]"
   script:
     - cd ids_iforest_package
-    # pytest options are already in pyproject; add HTML coverage output explicitly
-    - pytest -q --cov-report=xml --cov-report=html
+    # IMPORTANT: explicitly specify the coverage target and write artifacts to repo root
+    - pytest -q --cov=ids_iforest --cov-report=xml:../coverage.xml --cov-report=html:../htmlcov
   artifacts:
     reports:
       coverage_report:
         coverage_format: cobertura
-        path: ids_iforest_package/coverage.xml
+        path: coverage.xml
     paths:
-      - ids_iforest_package/coverage.xml
-      - ids_iforest_package/htmlcov/
+      - coverage.xml
+      - htmlcov/
     expire_in: 1 week
 
 # NOTE:
@@ -69,8 +69,7 @@ build_attacker:
     - docker build --pull -t "$CI_REGISTRY_IMAGE/attacker:${CI_COMMIT_SHORT_SHA}" services/attacker
     - docker push "$CI_REGISTRY_IMAGE/attacker:${CI_COMMIT_SHORT_SHA}"
 
-# ids: Dockerfile expects repo-root context (see docker-compose.yml)
-# so we build from '.' and point to Dockerfile explicitly
+# ids: Dockerfile needs repo-root context (see docker-compose.yml)
 build_ids:
   stage: build
   <<: *docker_build
@@ -78,7 +77,7 @@ build_ids:
     - docker build --pull -f services/ids/Dockerfile -t "$CI_REGISTRY_IMAGE/ids:${CI_COMMIT_SHORT_SHA}" .
     - docker push "$CI_REGISTRY_IMAGE/ids:${CI_COMMIT_SHORT_SHA}"
 
-# web: context is ./services/web (Dockerfile lives there)
+# web: context is ./services/web
 build_web:
   stage: build
   <<: *docker_build
@@ -87,7 +86,6 @@ build_web:
     - docker push "$CI_REGISTRY_IMAGE/web:${CI_COMMIT_SHORT_SHA}"
 
 # ---------- 3) SCAN (DevSecOps) ----------
-# Dependency vulnerability scan for the Python package
 dependency_scan:
   stage: scan
   image: python:3.12-slim
@@ -99,30 +97,33 @@ dependency_scan:
     - pip install -e ids_iforest_package/
   script:
     - pip-audit
-  allow_failure: true  # set to false to enforce
+  allow_failure: true  # flip to false if you want to enforce strict blocking
 
-# Container image scanning with Trivy for each built image (no docker daemon needed)
+# Trivy image scan for each built image (pulls from GitLab registry)
 scan_images:
   stage: scan
-  image: aquasec/trivy:latest
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]      # <-- unset ENTRYPOINT so GitLab can run the shell script
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-  variables:
-    # Trivy uses these for private registries
-    TRIVY_USERNAME: "$CI_REGISTRY_USER"
-    TRIVY_PASSWORD: "$CI_REGISTRY_PASSWORD"
   script:
-    - >
+    - |
       for s in attacker ids web; do
-        echo "Scanning $CI_REGISTRY_IMAGE/$s:${CI_COMMIT_SHORT_SHA}";
-        trivy image --quiet --no-progress --ignore-unfixed
-        --exit-code 1 --severity HIGH,CRITICAL
-        "$CI_REGISTRY_IMAGE/$s:${CI_COMMIT_SHORT_SHA}";
+        echo "Scanning $CI_REGISTRY_IMAGE/$s:${CI_COMMIT_SHORT_SHA}"
+        trivy image \
+          --username "$CI_REGISTRY_USER" \
+          --password "$CI_REGISTRY_PASSWORD" \
+          --no-progress \
+          --ignore-unfixed \
+          --severity HIGH,CRITICAL \
+          --exit-code 1 \
+          --timeout 10m \
+          "$CI_REGISTRY_IMAGE/$s:${CI_COMMIT_SHORT_SHA}"
       done
-  allow_failure: true  # set to false to enforce
+  allow_failure: true     # flip to false to enforce blocking on HIGH/CRITICAL
 
 # ---------- 4) DEPLOY (PyPI) ----------
-# Publishes the Python package when you push a tag
 publish_to_pypi:
   stage: deploy
   image: python:3.12-slim
