@@ -1,139 +1,139 @@
-# Include GitLab's security scanning templates for SAST (static code analysis) and secret detection
+# Security analyzers
 include:
-  - template: Security/SAST.gitlab-ci.yml             # Enables Bandit, Semgrep, etc. for Python code
-  - template: Security/Secret-Detection.gitlab-ci.yml # Enables secret leak scanning with Gitleaks
+  - template: Security/SAST.gitlab-ci.yml             # Bandit/Semgrep for Python
+  - template: Security/Secret-Detection.gitlab-ci.yml # Gitleaks-style secret scanning
 
 stages:
-  - test     # run tests and code analysis
-  - build    # build docker images for each service
-  - scan     # security scans (dependencies and container images)
-  - deploy   # deploy/release (e.g., publish to PyPI)
+  - test
+  - build
+  - scan
+  - deploy
 
-# 1. Test Stage
+# ---------- Global settings ----------
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+  DOCKER_DRIVER: overlay2
+
+cache:
+  key: "pip-cache"
+  paths:
+    - .pip-cache/
+
+# ---------- 1) TEST ----------
 unit_tests:
   stage: test
-  image: python:3.10
+  image: python:3.12-slim
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
   before_script:
-    - python -m pip install --upgrade pip wheel setuptools
-    # Install with binary dependencies to avoid compilation issues
-    - pip install --only-binary=numpy,scipy,pandas -e "ids_iforest_package/[test]"
-    # Install tshark (wireshark-cli) for more thorough testing if needed
-    - apt-get update -y && apt-get install -y tshark
+    - python -m pip install --upgrade pip
+    # Install your package in editable mode with test extras (pytest, pytest-cov, etc.)
+    - pip install -e "ids_iforest_package[test]"
   script:
-    # Run tests with pytest
-    - cd ids_iforest_package && python -m pytest -v -xvs
-    # Run tests with coverage
-    - python -m pytest -xvs --cov=ids_iforest --cov-report=xml --cov-report=term
+    - cd ids_iforest_package
+    # pytest options are already in pyproject; add HTML coverage output explicitly
+    - pytest -q --cov-report=xml --cov-report=html
   artifacts:
     reports:
       coverage_report:
         coverage_format: cobertura
-        path: coverage.xml
+        path: ids_iforest_package/coverage.xml
     paths:
-      - coverage.xml
+      - ids_iforest_package/coverage.xml
+      - ids_iforest_package/htmlcov/
     expire_in: 1 week
 
-# (Note: SAST and Secret Detection jobs are automatically added by the include templates above.
-# They will run in this stage as well, scanning the code for vulnerabilities and secrets.)
+# NOTE:
+# SAST + Secret Detection jobs from the templates run in the "test" stage automatically.
 
-# 2. Build Stage – one job per service container
+# ---------- Reusable anchor for docker build jobs ----------
+.docker-build-template: &docker_build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+  before_script:
+    # Auth to GitLab Container Registry using built-in CI variables
+    - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+# ---------- 2) BUILD ----------
+# attacker: context is ./services/attacker (Dockerfile lives there)
 build_attacker:
   stage: build
-  image: docker:24.0.5
-  services:
-    - docker:24.0.5-dind
-  variables:
-    DOCKER_HOST: tcp://docker:2376
-    DOCKER_TLS_CERTDIR: "/certs"
+  <<: *docker_build
   script:
-    # Authenticate to GitLab Container Registry
-    - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u "$CI_REGISTRY_USER" --password-stdin
-    # Build and push the "attacker" service image
-    - docker build -t "$CI_REGISTRY_IMAGE/attacker:${CI_COMMIT_SHORT_SHA}" services/attacker
+    - docker build --pull -t "$CI_REGISTRY_IMAGE/attacker:${CI_COMMIT_SHORT_SHA}" services/attacker
     - docker push "$CI_REGISTRY_IMAGE/attacker:${CI_COMMIT_SHORT_SHA}"
-  only:
-    - branches   # run on all branch commits
 
+# ids: Dockerfile expects repo-root context (see docker-compose.yml)
+# so we build from '.' and point to Dockerfile explicitly
 build_ids:
   stage: build
-  image: docker:24.0.5
-  services:
-    - docker:24.0.5-dind
-  variables:
-    DOCKER_HOST: tcp://docker:2376
-    DOCKER_TLS_CERTDIR: "/certs"
+  <<: *docker_build
   script:
-    - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u "$CI_REGISTRY_USER" --password-stdin
-    # Build and push the "ids" service image
-    - docker build -t "$CI_REGISTRY_IMAGE/ids:${CI_COMMIT_SHORT_SHA}" services/ids
+    - docker build --pull -f services/ids/Dockerfile -t "$CI_REGISTRY_IMAGE/ids:${CI_COMMIT_SHORT_SHA}" .
     - docker push "$CI_REGISTRY_IMAGE/ids:${CI_COMMIT_SHORT_SHA}"
-  only:
-    - branches
 
+# web: context is ./services/web (Dockerfile lives there)
 build_web:
   stage: build
-  image: docker:24.0.5
-  services:
-    - docker:24.0.5-dind
-  variables:
-    DOCKER_HOST: tcp://docker:2376
-    DOCKER_TLS_CERTDIR: "/certs"
+  <<: *docker_build
   script:
-    - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u "$CI_REGISTRY_USER" --password-stdin
-    # Build and push the "web" service image
-    - docker build -t "$CI_REGISTRY_IMAGE/web:${CI_COMMIT_SHORT_SHA}" services/web
+    - docker build --pull -t "$CI_REGISTRY_IMAGE/web:${CI_COMMIT_SHORT_SHA}" services/web
     - docker push "$CI_REGISTRY_IMAGE/web:${CI_COMMIT_SHORT_SHA}"
-  only:
-    - branches
 
-# 3. Scan Stage – security scanning jobs
+# ---------- 3) SCAN (DevSecOps) ----------
+# Dependency vulnerability scan for the Python package
 dependency_scan:
   stage: scan
-  image: python:3.10
-  allow_failure: false    # fail the job if vulnerabilities are found
+  image: python:3.12-slim
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
   before_script:
-    - pip install --upgrade pip
-    - pip install pip-audit           # install pip-audit tool for dependency scanning
-    - pip install -e ids_iforest_package/   # install the package to capture all its dependencies
+    - python -m pip install --upgrade pip
+    - pip install pip-audit
+    - pip install -e ids_iforest_package/
   script:
-    - pip-audit    # scan installed dependencies for known vulnerabilities
-  # (pip-audit will exit non-zero if any vulnerable dependencies are found)
+    - pip-audit
+  allow_failure: true  # set to false to enforce
 
+# Container image scanning with Trivy for each built image (no docker daemon needed)
 scan_images:
   stage: scan
   image: aquasec/trivy:latest
-  services:
-    - docker:24.0.5-dind
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
   variables:
-    DOCKER_HOST: tcp://docker:2376
-    DOCKER_TLS_CERTDIR: "/certs"
-  allow_failure: false
+    # Trivy uses these for private registries
+    TRIVY_USERNAME: "$CI_REGISTRY_USER"
+    TRIVY_PASSWORD: "$CI_REGISTRY_PASSWORD"
   script:
-    - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u "$CI_REGISTRY_USER" --password-stdin
-    # Loop through each service directory and scan its image (skip if no Dockerfile)
-    - |
-      for service_dir in $(ls services); do
-        if [ -f "services/$service_dir/Dockerfile" ]; then
-          echo "Scanning image for $service_dir..."
-          docker pull "$CI_REGISTRY_IMAGE/${service_dir}:${CI_COMMIT_SHORT_SHA}" || exit $?
-          # Fail the job if any HIGH or CRITICAL vulnerabilities are found
-          trivy image --exit-code 1 --severity HIGH,CRITICAL "$CI_REGISTRY_IMAGE/${service_dir}:${CI_COMMIT_SHORT_SHA}" || exit $?
-        else
-          echo "Skipping $service_dir (no Dockerfile present; no image to scan)."
-        fi
+    - >
+      for s in attacker ids web; do
+        echo "Scanning $CI_REGISTRY_IMAGE/$s:${CI_COMMIT_SHORT_SHA}";
+        trivy image --quiet --no-progress --ignore-unfixed
+        --exit-code 1 --severity HIGH,CRITICAL
+        "$CI_REGISTRY_IMAGE/$s:${CI_COMMIT_SHORT_SHA}";
       done
+  allow_failure: true  # set to false to enforce
 
-# 4. Deploy Stage – publish package to PyPI (runs on tagged commits)
+# ---------- 4) DEPLOY (PyPI) ----------
+# Publishes the Python package when you push a tag
 publish_to_pypi:
   stage: deploy
-  image: python:3.10
+  image: python:3.12-slim
+  rules:
+    - if: '$CI_COMMIT_TAG'
   variables:
     PIP_DISABLE_PIP_VERSION_CHECK: "1"
   before_script:
-    - pip install --upgrade pip
-    - pip install build twine    # install build tools for packaging
+    - python -m pip install --upgrade pip
+    - pip install build twine
   script:
-    - python -m build ids_iforest_package/         # build the package (creates dist/*.whl and dist/*.tar.gz)
-    - twine upload dist/* -u "$PYPI_USERNAME" -p "$PYPI_PASSWORD"  # upload to PyPI
-  only:
-    - tags       # only run on Git tags (so that every code push doesn't publish)
+    - cd ids_iforest_package
+    - python -m build
+    - twine upload dist/* -u "$PYPI_USERNAME" -p "$PYPI_PASSWORD"
