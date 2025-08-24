@@ -191,21 +191,49 @@ dependency_scan:
       - pip-audit.json
     expire_in: 1 week
 
-# ---------- 4) DEPLOY ----------
+# ---------- 2b) BUILD (PyPI dists) ----------
+build_pypi_dist:
+  stage: build
+  image: python:3.12-slim
+  # Build only for releases (tags)
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  before_script:
+    - python -m pip install -U pip build
+  script:
+    - cd ids_iforest_package
+    - python -m build           # creates ./dist/ (wheel + sdist)
+  artifacts:
+    paths:
+      - ids_iforest_package/dist/
+    expire_in: 1 week
+
+
 publish_to_pypi:
   stage: deploy
   image: python:3.12-slim
+  # Fetch the wheel/sdist built above
+  dependencies:
+    - build_pypi_dist
+  # Publish only from immutable releases (tags)
   rules:
-    - if: "$CI_COMMIT_TAG"     # publish on a tag only (create a tag on main)
+    - if: '$CI_COMMIT_TAG'
+  # Request an OIDC ID token from GitLab for PyPI
+  id_tokens:
+    PYPI_ID_TOKEN:
+      aud: pypi        # use 'testpypi' if targeting TestPyPI
+  # Optional but recommended: tie to a protected environment
+  environment:
+    name: release
   variables:
     PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    TWINE_NON_INTERACTIVE: "1"
   before_script:
-    - python -m pip install --upgrade pip
-    - pip install build twine
+    - python -m pip install -U pip twine
   script:
-    - cd ids_iforest_package
-    - python -m build
-    - twine upload dist/* -u "$PYPI_USERNAME" -p "$PYPI_PASSWORD"
+    - twine check --strict ids_iforest_package/dist/*
+    # With Trusted Publishing, Twine exchanges the OIDC token automatically:
+    - twine upload ids_iforest_package/dist/*
 
 # Publish HTML coverage via GitLab Pages (browse without downloading)
 pages:

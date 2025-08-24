@@ -3,6 +3,7 @@ import json
 import datetime
 from typing import Any
 
+
 def append_json_alert(jsonl_path: str, **alert_data: Any) -> None:
     """
     Append an alert to the JSONL file (one JSON object per line) for Promtail/Loki.
@@ -10,7 +11,7 @@ def append_json_alert(jsonl_path: str, **alert_data: Any) -> None:
     os.makedirs(os.path.dirname(jsonl_path), exist_ok=True)
 
     if "timestamp" not in alert_data:
-        alert_data["timestamp"] = datetime.datetime.utcnow().isoformat()
+        alert_data["timestamp"] = datetime.utcnow().isoformat() + "Z"
 
     # Ensure pure-Python types for JSON (avoid numpy scalars)
     for k, v in list(alert_data.items()):

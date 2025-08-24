@@ -25,6 +25,9 @@ classifiers = [
   "Intended Audience :: Science/Research"
 ]
 
+[project.urls]
+"Homepage" = "https://gitlab.com/rachiid007/network_traffic_analysis"
+
 # PEP 621 requires an ARRAY OF STRINGS here.
 dependencies = [
   "pyshark>=0.6,<0.7",        # Live capture & PCAP via tshark

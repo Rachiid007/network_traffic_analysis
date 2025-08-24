@@ -16,7 +16,7 @@ scrape_configs:
           job: ids_alerts
           __path__: /var/ids-logs/alerts.jsonl
     pipeline_stages:
-      - json:
+      - json:                   # parse the JSON log line
           expressions:
             timestamp: timestamp
             src_ip: src_ip
@@ -26,8 +26,10 @@ scrape_configs:
             protocol: protocol
             score: score
             level: level
-      - labels:
+      - labels:                 # promote useful fields to labels
           level:
-      - timestamp:
+          src_ip:
+          dst_ip:
+      - timestamp:             # use the correct timestamp field
           source: timestamp
           format: RFC3339Nano
