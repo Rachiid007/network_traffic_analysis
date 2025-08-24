@@ -230,7 +230,7 @@ class TestAlertPersistence:
         # Mock logger
         mock_logger = mock.MagicMock()
 
-        # Test dataframe
+        # Test dataframe with all required columns to avoid KeyError
         df = pd.DataFrame({
             "src_ip": ["192.168.1.1"],
             "dst_ip": ["10.0.0.1"],
@@ -241,12 +241,22 @@ class TestAlertPersistence:
             "bidirectional_bytes": [1000],
             "mean_packet_size": [100],
             "std_packet_size": [10],
-            "flow_duration": [0.5]
+            "flow_duration": [0.5],
+            # Adding the extended columns that were missing
+            "tcp_syn_count": [1],
+            "tcp_fin_count": [1],
+            "tcp_rst_count": [0],
+            "iat_mean": [0.05],
+            "iat_std": [0.01],
+            "bytes_per_packet": [100],
+            "packets_per_second": [20]
         })
 
         # Mock model and scaler
         model = mock.MagicMock()
+        model.decision_function.return_value = [0.1]  # Return a non-empty scores array
         scaler = mock.MagicMock()
+        scaler.transform.return_value = [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]]
 
         with tempfile.TemporaryDirectory() as tmpdir:
             csv_path = os.path.join(tmpdir, "alerts.csv")

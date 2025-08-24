@@ -1,6 +1,9 @@
 """Live anomaly detection using tshark (Docker/Windows friendly).
 
-- Captures packets via tshark in "fields" mode (no pyshark).
+- Capt    all_numeric_cols = numeric_cols + extended
+    X = scaler.transform(df[all_numeric_cols].fillna(0.0).astype(float).values)
+    scores = model.decision_function(X)
+    now_str = _dt.datetime.utcnow().isoformat()s packets via tshark in "fields" mode (no pyshark).
 - Aggregates packets into time-windowed flows.
 - Scores flows using a trained Isolation Forest + scaler.
 - Writes anomalies to alerts.jsonl (Grafana/Promtail) and alerts.csv.
@@ -67,7 +70,14 @@ def _score_flows(
 
     X = scaler.transform(df[numeric_cols].fillna(0.0).astype(float).values)
     scores = model.decision_function(X)
-    now_str = _dt.datetime.utcnow().isoformat()
+
+    # Use timezone-aware datetime objects for UTC time (fixing deprecation warning)
+    try:
+        # Python 3.11+ has UTC constant
+        now_str = _dt.datetime.now(_dt.UTC).isoformat()
+    except AttributeError:
+        # Fallback for older Python versions
+        now_str = _dt.datetime.now(_dt.timezone.utc).isoformat()
 
     for idx, s in enumerate(scores):
         score_f = float(s)
