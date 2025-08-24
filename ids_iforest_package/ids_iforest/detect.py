@@ -122,6 +122,32 @@ def _process_dataframe(
     csv_path: str,
 ) -> None:
     """Score flows in `df` and log any anomalies."""
+    # Score all flows to compute distribution
+    if not df.empty:
+        numeric_cols = [
+            "bidirectional_packets",
+            "bidirectional_bytes",
+            "mean_packet_size",
+            "std_packet_size",
+            "flow_duration",
+            "tcp_syn_count",
+            "tcp_fin_count",
+            "tcp_rst_count",
+            "iat_mean",
+            "iat_std",
+            "bytes_per_packet",
+            "packets_per_second",
+        ]
+        X = scaler.transform(df[numeric_cols].fillna(0.0).astype(float).values)
+        scores = model.decision_function(X)
+        min_s, max_s = float(min(scores)), float(max(scores))
+        mean_s = float(sum(scores) / len(scores))
+        # Optionally compute percentiles with numpy or statistics.quantiles
+        logger.info(
+            f"Score stats: count={len(scores)} min={min_s:.4f} "
+            f"mean={mean_s:.4f} max={max_s:.4f}"
+        )
+
     alerts = list(_score_flows(model, scaler, df, red_thr, yellow_thr))
     logger.info(f"Scored {len(df)} flows, produced {len(alerts)} alerts")
 

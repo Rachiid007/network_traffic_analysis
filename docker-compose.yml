@@ -14,7 +14,8 @@ services:
     environment:
       IDS_CONFIG: /app/config/config.yml
       IFACE: eth0
-      IDS_YELLOW_THRESHOLD: "0.00"
+      IDS_YELLOW_THRESHOLD: "0.14" # warn when score < 0.14
+      IDS_RED_THRESHOLD: "0.00" # critical when score < 0.00
     volumes:
       - ./config:/app/config
       - ./models:/app/models         # pre-trained model

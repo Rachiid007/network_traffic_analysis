@@ -292,3 +292,11 @@ ids-iforest-detect --csv /tmp/synthetic.csv --config /app/config/config.yml --al
 ls -l /app/logs
 echo "Last alerts:"; tail -n 5 /app/logs/alerts.jsonl || true
 cat /app/logs/alerts.jsonl
+
+
+# How to trigger publish_to_pypi
+Keeping with standard release practice, the job runs on tags.
+```bash
+git tag -a v0.1.0 -m "Release v0.1.0"
+git push origin v0.1.0
+```
