@@ -24,11 +24,6 @@ classifiers = [
   "Intended Audience :: Developers",
   "Intended Audience :: Science/Research"
 ]
-
-[project.urls]
-"Homepage" = "https://gitlab.com/rachiid007/network_traffic_analysis"
-
-# PEP 621 requires an ARRAY OF STRINGS here.
 dependencies = [
   "pyshark>=0.6,<0.7",        # Live capture & PCAP via tshark
   "scikit-learn>=1.5,<1.8",   # IsolationForest, StandardScaler (Py 3.11 compatible)
@@ -39,6 +34,10 @@ dependencies = [
   "joblib>=1.3",              # Model/scaler persistence
   "Flask>=2.3"                # Optional web UI (server.py)
 ]
+
+[project.urls]
+"Homepage" = "https://gitlab.com/rachiid007/network_traffic_analysis"
+"Documentation" = "https://gitlab.com/rachiid007/network_traffic_analysis/-/blob/main/README.md"
 
 [project.scripts]
 ids-iforest-train   = "ids_iforest.train:main"
