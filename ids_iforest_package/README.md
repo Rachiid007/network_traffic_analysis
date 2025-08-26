@@ -6,39 +6,36 @@ Network intrusion detection system based on Isolation Forest and PyShark.
 
 This package provides tools for network traffic analysis and anomaly detection using machine learning. It uses the Isolation Forest algorithm to detect unusual network behavior that may indicate potential security threats.
 
-## Features
+For complete documentation and usage examples, please refer to the [main project README](../README.md).
 
-- Train anomaly detection models on network traffic data
-- Detect anomalies in live network traffic or PCAP files
-- Convert PCAP files to flow-based CSV format
-- Generate synthetic datasets for testing
-
-## Installation
+## Quick Installation
 
 ```bash
 pip install ids-iforest
 ```
 
-## Usage
-
-### Training a model
+Or for development:
 
 ```bash
-ids-iforest-train --input data/train.csv --output models/ids_iforest.joblib
+pip install -e .
 ```
 
-### Detecting anomalies
+## Available Commands
 
-```bash
-ids-iforest-detect --model models/ids_iforest.joblib --interface eth0
-```
+After installation, the following commands will be available:
 
-### Converting PCAP to CSV
+* `ids-iforest-train` – Train an Isolation Forest model on flow data
+* `ids-iforest-detect` – Run anomaly detection (live/PCAP/CSV)
+* `ids-iforest-capture` – Capture network traffic to flows CSV
+* `ids-iforest-pcap2csv` – Convert PCAP files to flows CSV
+* `ids-iforest-generate` – Generate synthetic datasets for testing
 
-```bash
-ids-iforest-pcap2csv --input capture.pcap --output flows.csv
-```
+## Dependencies
+
+- Python 3.10 or newer
+- tshark (for live capture)
+- scikit-learn, pandas, numpy, pyyaml, colorama, joblib
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT - See the LICENSE file for details.

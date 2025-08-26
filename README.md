@@ -1,43 +1,38 @@
 # Network Traffic Anomaly Detection (Isolation Forest)
 
-An end‑to‑end, container‑ready Intrusion / Anomaly Detection playground built around:
-
-* Flow aggregation (bidirectional, canonical 5‑tuple) from packets (live or PCAP)
-* Feature engineering (packet/byte counts, statistics, timings, TCP flags)
-* Isolation Forest model training (with optional label‑aware contamination calibration & synthetic outliers)
-* Multiple data preparation utilities (live capture, PCAP → flows, synthetic data generator, CSE‑CIC‑IDS 2018 normaliser)
-* Real‑time detection with structured logging + alerts CSV
-* Observability stack (Loki + Promtail + Grafana) to visualise alerts
-* Reproducible Docker Compose demo including: victim web server, detector, attack traffic generator, monitoring stack
-
-Everything is packaged as an installable Python module (`ids-iforest`) exposing convenient console scripts.
+An end‑to‑end, container‑ready Intrusion Detection System (IDS) built around Isolation Forest algorithm for anomaly-based detection of network attacks.
 
 ---
 
 ## 1. Repository Layout
 
 ```
-ids_iforest_package/       Python package (pyproject.toml, source code)
-  ids_iforest/
-   utils.py               Core utilities (config, logging, flow aggregation, model IO)
-   train.py               Train Isolation Forest
-   detect.py              Live / CSV / PCAP detection (writes alerts.csv)
-   capture.py             Live capture → flows CSV (for building datasets)
-   pcap2flows.py          Offline PCAP → flows CSV
-   server.py              (Optional) Flask UI (not enabled by default entry points)
-   scripts/
-    generate_datasets.py Synthetic benign + SYN flood + port scan data
-    prepare_csecic2018.py Curate CSE‑CIC‑IDS 2018 CSVs → unified feature set
-config/                    Default YAML config (window, iface, paths...)
-models/                    Pre‑trained model(s) + thresholds.json + model cards
-logs/                      Runtime logs + alerts.csv (for monitoring)
-data/                      Example raw & processed datasets
-docker-compose.yml         Orchestrates demo & monitoring stack
-attacker/                  Traffic generator container (wrk + hping3)
-ids/                       IDS service Dockerfile & entrypoint
-web/                       Minimal Nginx victim site (port 8080)
-monitoring/                Loki / Promtail / Grafana provisioning
-tests/                     Pytest unit tests (dataset + training/detection)
+├── config/                  # Configuration files
+│   └── config.yml           # Main configuration for the IDS
+├── data/                    # Training and test data
+│   ├── train.csv            # Synthetic or real training data
+│   ├── processed/           # Preprocessed datasets
+│   └── raw/                 # Original raw data files
+├── ids_iforest_package/     # Main Python package
+│   ├── ids_iforest/         # Core modules
+│   │   ├── scripts/         # Helper scripts
+│   │   └── ...              # Core modules (train.py, detect.py, etc.)
+│   ├── tests/               # Unit and integration tests
+│   └── pyproject.toml       # Package metadata and dependencies
+├── logs/                    # Log files directory
+│   ├── alerts.csv           # Generated alerts
+│   ├── detect.log           # Detection process logs
+│   └── train.log            # Training process logs
+├── models/                  # Trained models directory
+│   ├── ids_iforest_latest.joblib  # Latest model symlink
+│   ├── ids_iforest_<hash>.joblib  # Versioned model files
+│   └── thresholds.json      # Alert thresholds
+├── services/                # Docker service definitions
+│   ├── attacker/            # Attack simulation container
+│   ├── ids/                 # IDS container => will run the [PyPi local module](./ids_iforest_package/pyproject.toml)
+│   ├── web/                 # Victim web server
+│   └── monitoring/          # Grafana, Loki, Promtail stack
+└── docker-compose.yml       # Multi-container orchestration
 ```
 
 ---
@@ -45,17 +40,16 @@ tests/                     Pytest unit tests (dataset + training/detection)
 ## 2. Core Concepts & Data Flow
 
 ```
-        (live packets)    (PCAP)               (synthetic / prepared CSV)
-            │             │                             │
-    capture.py ──┴─┐       pcap2flows.py                  generate_datasets.py
-              │                prepare_csecic2018.py (optional real dataset)
-              ▼
-          Flows CSV  ──► train.py ──► model (.joblib) + thresholds.json
-                            │
-                  detect.py ◄──┴── (live / CSV / PCAP) → alerts.csv + logs
-                            │
-                     Promtail → Loki → Grafana dashboard
+1. Packet Capture → 2. Flow Aggregation → 3. Feature Extraction →
+4. Anomaly Detection → 5. Alert Generation → 6. Visualization
 ```
+
+1. **Packet Capture**: Live traffic is captured using PyShark/tshark with configurable BPF filters.
+2. **Flow Aggregation**: Packets are aggregated into bi-directional flows within time windows.
+3. **Feature Extraction**: Features like packet counts, bytes, duration, TCP flags, IAT statistics are calculated.
+4. **Anomaly Detection**: Isolation Forest model scores flows (0-1), with lower scores indicating anomalies.
+5. **Alert Generation**: Flows with scores below thresholds trigger alerts written to logs/alerts.csv.
+6. **Visualization**: Grafana dashboard displays alerts and traffic patterns via Loki.
 
 Key feature sets: `minimal` or (default) `extended` (adds TCP flag counts, IAT statistics, per‑packet & per‑second rates).
 
@@ -65,17 +59,17 @@ Key feature sets: `minimal` or (default) `extended` (adds TCP flag counts, IAT s
 
 Prerequisites: Python 3.10 – 3.13 (PyShark requires a working `tshark`), `pip`.
 
-```
+```bash
 pip install -e ids_iforest_package
 ```
 
 Installed console scripts (from `pyproject.toml`):
 
-* `ids-iforest-train` – train model
-* `ids-iforest-detect` – run detection (live / CSV / PCAP)
-* `ids-iforest-capture` – capture live traffic to flows CSV (optionally labelled)
-* `ids-iforest-pcap2csv` – convert a PCAP to flows CSV
-* `ids-iforest-generate` – synthetic dataset generator
+* `ids-iforest-train` – Train model on flow CSV data with optional contamination calibration
+* `ids-iforest-detect` – Run detection on live traffic, PCAP file, or flow CSV
+* `ids-iforest-capture` – Capture live traffic to flows CSV (with optional labeling)
+* `ids-iforest-pcap2csv` – Convert a PCAP file to flows CSV format
+* `ids-iforest-generate` – Generate synthetic datasets for testing
 
 Note: `server.py` (Flask UI) exists but its entry point is commented out; monitoring now uses Grafana. You can still run it manually: `python -m ids_iforest.server`.
 
@@ -86,34 +80,39 @@ Install `tshark` (Ubuntu/Debian): `sudo apt install tshark` (needs permission to
 ## 4. Quick Start (Local)
 
 1. Generate synthetic training data:
-  ```
+  ```bash
   ids-iforest-generate --benign 1000 --syn-flood 200 --port-scan 200 --out data/train.csv
   ```
+  This creates a labeled dataset with both normal traffic and attack patterns.
 
 2. Train a model:
-  ```
+  ```bash
   ids-iforest-train --csv data/train.csv --config config/config.yml --out models
   ```
-  Produces: `models/ids_iforest_<git>.joblib`, `ids_iforest_latest.joblib`, `thresholds.json`, `model_card_<hash>.json`.
+  Produces:
+  - `models/ids_iforest_<git_hash>.joblib` - Versioned model
+  - `models/ids_iforest_latest.joblib` - Symlink to latest model
+  - `thresholds.json` - Detection thresholds
+  - `model_card_<hash>.json` - Model metadata
 
 3. Run detection on the same CSV (offline):
-  ```
+  ```bash
   ids-iforest-detect --csv data/train.csv --config config/config.yml
   ```
 
 4. Run live detection (captures packets on configured interface):
-  ```
+  ```bash
   ids-iforest-detect --config config/config.yml
   ```
 
 5. Convert a PCAP to flows then detect:
-  ```
+  ```bash
   ids-iforest-pcap2csv --pcap capture.pcap --out flows.csv
   ids-iforest-detect --csv flows.csv --config config/config.yml
   ```
 
 6. Capture your own benign flows for future training:
-  ```
+  ```bash
   ids-iforest-capture --minutes 5 --out benign.csv --label 0
   ```
 
@@ -126,16 +125,17 @@ Alerts will append to `logs/alerts.csv` and log files `logs/detect.log`, etc.
 Example (current default):
 ```yaml
 window_seconds: 10          # Flow aggregation window size
-bpf_filter: "tcp or udp"     # Berkeley Packet Filter for capture
+bpf_filter: "tcp or udp"    # Berkeley Packet Filter for capture
 feature_set: extended       # 'minimal' or 'extended'
 contamination: 0.02         # Default contamination (may be overridden by calibration)
 model_dir: /app/models      # Can be relative or absolute
-logs_dir: /app/logs
+logs_dir: /app/logs         # Logs directory path
 iface: "any"                # Interface for live capture (e.g. eth0, any)
 ```
+
 Path resolution & fallbacks (implemented in `utils.load_config`):
 1. Read YAML (apply defaults if keys missing)
-2. Override with environment variables `IDS_MODEL_DIR`, `IDS_LOGS_DIR` if set
+2. Override with environment variables `IDS_MODEL_DIR`, `IDS_LOGS_DIR`, `IFACE` if set
 3. Resolve relative paths relative to the config file location
 4. Test writability. If not writable, try (first that works):
   * `/app/models` or `/app/logs` (inside container)
@@ -149,17 +149,19 @@ export IDS_MODEL_DIR=/absolute/path/to/models
 export IDS_LOGS_DIR=/absolute/path/to/logs
 ```
 
-Thresholds: `thresholds.json` contains `red_threshold` & `yellow_threshold` (yellow defaults to 0.0). `detect.py` marks flows with score < yellow as anomalies; `< red` = RED else YELLOW.
+Thresholds: `thresholds.json` contains `red_threshold` & `yellow_threshold` (yellow defaults to 0.0). `detect.py` marks flows with score < yellow as anomalies; `< red` = RED alert else YELLOW alert.
 
 ---
 
 ## 6. Training Details
 
-* Features scaled with `StandardScaler`.
+* Features scaled with `StandardScaler` to normalize values across different scales.
 * Optional contamination calibration: grid search over `[0.005, 0.01, 0.02, 0.05]` using F1 on validation if labels present.
 * Synthetic outlier injection (default 2%) pushes model to assign lower scores to extreme values.
-* Model + scaler stored together (joblib dict). Latest symlink file: `ids_iforest_latest.joblib`.
-* Threshold heuristic: if labels present → 1st percentile of benign scores; else min(score) − 0.05.
+* Model + scaler stored together in a joblib dictionary. Latest symlink file: `ids_iforest_latest.joblib`.
+* Threshold heuristic:
+  - If labels present → 1st percentile of benign scores
+  - Otherwise → min(score) - 0.05
 * Model card records git hash, feature set, contamination default, feature columns.
 
 ---
@@ -167,78 +169,113 @@ Thresholds: `thresholds.json` contains `red_threshold` & `yellow_threshold` (yel
 ## 7. Detection Modes
 
 `ids-iforest-detect` chooses mode by arguments:
-* `--csv <flows.csv>`: score existing flow rows
-* `--pcap <file.pcap>`: stream PCAP packets, aggregate per window, score
-* (no file args): live capture on `iface`
+* `--csv <flows.csv>`: Score existing flow rows from a CSV file
+* `--pcap <file.pcap>`: Stream PCAP packets, aggregate per window, score
+* (no file args): Live capture on configured `iface` from config.yml
 
 Outputs:
-* Logs: `logs/detect.log` (colour in console if `colorama` installed)
-* Alerts CSV: `logs/alerts.csv` columns: `timestamp,src_ip,dst_ip,src_port,dst_port,protocol,score,level`
+* Logs: `logs/detect.log` (color-coded in console if `colorama` installed)
+* Alerts CSV: `logs/alerts.csv` with columns:
+  `timestamp,src_ip,dst_ip,src_port,dst_port,protocol,score,level`
+* Alerts JSON: `logs/alerts.jsonl` (for Grafana/Loki ingestion)
 
 ---
 
 ## 8. Preparing Real Dataset (CSE‑CIC‑IDS 2018)
 
-Use the helper normaliser (handles column name variants, merges direction counts, converts microseconds → seconds, derives expected features):
-```
+Use the helper normaliser script to prepare this standard dataset for training:
+```bash
 python -m ids_iforest.scripts.prepare_csecic2018 \
   --in_glob "data/raw/csecic2018/*TrafficForML_CICFlowMeter.csv" \
-  --out_csv data/processed/csecic2018_small.csv \
+  --out_csv data/processed/csecic2018_processed.csv \
   --limit 500000   # optional row limit
 ```
-Then train on the resulting CSV.
+
+This script handles:
+- Column name variants
+- Merges direction counts
+- Converts microseconds → seconds
+- Derives expected features
+
+Then train on the resulting CSV as normal.
 
 ---
 
 ## 9. Synthetic Dataset Generator
 
-`ids-iforest-generate` creates benign + SYN flood + port scan flows with a `label` column (0 benign / 1 attack). Handy for quick tests & CI.
+`ids-iforest-generate` creates realistic flow data with the following characteristics:
+
+* **Benign flows**: Normal packet counts, bytes, and timing
+* **SYN-flood flows**: Extremely high packet rates with TCP SYN flags
+* **Port scan flows**: Many flows with minimal packets per destination port
+
+All generated flows include a `label` column (0 for benign, 1 for attack) for training and evaluation.
 
 ---
 
 ## 10. Docker & Monitoring Stack
 
 `docker-compose.yml` services:
-* `web` – Nginx victim (port 8080 host)
-* `ids` – Detector container (shares network namespace of `web` so `tshark` sees intra‑container traffic). Runs `ids-iforest-detect` (not Flask UI) via `ids/entrypoint.sh`. If no model is present it auto‑generates synthetic dataset & trains (requires writable `/app/models`). In the provided compose file `./models:/app/models:ro` is mounted read‑only: supply a pre‑trained model locally or remove `:ro` to allow training inside container.
-* `attacker` – Generates benign HTTP load (wrk) and intermittent SYN floods (hping3)
-* `loki` + `promtail` + `grafana` – Observability stack. `promtail` tails `logs/alerts.csv` → Loki → Grafana dashboard (`monitoring/grafana/dashboards/mini-ids.json`). Grafana port: 3000 (anonymous viewer enabled)
 
-Run demo:
-```
+* **web**: Nginx victim web server (exposed on port 8080)
+* **ids_iforest**: Detector container that:
+  - Shares network namespace with `web` (sees all container traffic)
+  - Runs `ids-iforest-detect` via `services/ids/entrypoint.sh`
+  - Auto-generates synthetic data & trains if no model exists
+  - Mounts `./models:/app/models` (read-only by default)
+  - Has special capabilities (`NET_ADMIN`, `NET_RAW`) for packet capture
+* **attacker**: Attack simulation container that:
+  - Generates benign HTTP traffic with Apache Bench (`ab`)
+  - Performs SYN floods with `hping3`
+  - Conducts port scans with `nmap`
+* **loki + promtail + grafana**: Observability stack where:
+  - `promtail` tails `logs/alerts.csv` → `loki` → `grafana`
+  - Grafana dashboard in `monitoring/grafana/dashboards/mini-ids.json`
+  - Grafana port: 3000 (anonymous viewer enabled)
+
+Run the demo:
+```bash
 docker compose build
 docker compose up
 ```
+
 Visit:
-* Victim web: http://localhost:8080
-* Grafana:    http://localhost:3000 (admin/admin if login needed)
+* Victim web server: http://localhost:8080
+* Grafana dashboard: http://localhost:3000 (admin/admin if login needed)
 
 Stop:
-```
+```bash
 docker compose down
 ```
 
-Privileges: Packet capture needs capabilities. The `ids` container adds `NET_ADMIN` & `NET_RAW` so `tshark` can sniff.
-
 ---
 
-## 11. Optional Flask UI (Legacy)
+## 11. PyPI Package Structure
 
-`ids_iforest/server.py` can run a lightweight web page listing alerts (port 5000). Not enabled by default. To try:
-```
-python -m ids_iforest.server --config config/config.yml
-```
-Or re‑enable in `pyproject.toml` by adding:
-```
-ids-iforest-server = "ids_iforest.server:main"
-```
+The `ids_iforest_package` contains the following key modules:
 
----
+* **train.py**: Implements model training with contamination calibration
+* **detect.py**: Core detection engine for all three modes (live/PCAP/CSV)
+* **capture.py**: Captures traffic to flows CSV for training data collection
+* **pcap2flows.py**: Converts PCAP files to flows CSV format
+* **utils.py**: Common utilities for configuration, logging, and flow processing
+* **scripts/generate_datasets.py**: Synthetic data generator
+* **scripts/prepare_csecic2018.py**: Preprocessor for CIC-IDS 2018 dataset
+
+Command-line tools in `pyproject.toml`:
+```toml
+[project.scripts]
+ids-iforest-train   = "ids_iforest.train:main"
+ids-iforest-detect  = "ids_iforest.detect:main"
+ids-iforest-capture = "ids_iforest.capture:main"
+ids-iforest-pcap2csv= "ids_iforest.pcap2flows:main"
+ids-iforest-generate= "ids_iforest.scripts.generate_datasets:main"
+```
 
 ## 12. Testing
 
 Pytest tests cover synthetic dataset generation and a minimal train→detect cycle. After editable install:
-```
+```bash
 pytest -q
 ```
 
@@ -277,26 +314,3 @@ MIT – see `LICENSE`.
 Author: Rachid Bellaali. Isolation Forest, PyShark, Loki, Grafana are respective upstream projects; datasets like CSE‑CIC‑IDS 2018 belong to their creators.
 
 Happy experimenting & learning! 🚀
-
-pre-commit run end-of-file-fixer --files <PATH to the file causing issues>
-pre-commit run --all-files
-
-git push --no-verify
-
-(Get-Content -Raw ids_iforest_package\pytest.ini) -replace "`r`n", "`n" | Set-Content -NoNewline ids_iforest_package\pytest.ini
-
-# debug quicly why not generating alert json
-docker exec -it ids_iforest /bin/bash
-ids-iforest-generate --benign 50 --syn-flood 20 --port-scan 20 --out /tmp/synthetic.csv
-ids-iforest-detect --csv /tmp/synthetic.csv --config /app/config/config.yml --alerts-csv /app/logs/alerts.csv
-ls -l /app/logs
-echo "Last alerts:"; tail -n 5 /app/logs/alerts.jsonl || true
-cat /app/logs/alerts.jsonl
-
-
-# How to trigger publish_to_pypi
-Keeping with standard release practice, the job runs on tags.
-```bash
-git tag -a v0.1.0 -m "Release v0.1.0"
-git push origin v0.1.0
-```
