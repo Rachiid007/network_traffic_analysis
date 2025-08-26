@@ -3,6 +3,7 @@ include:
   - template: Security/SAST.gitlab-ci.yml            # Python SAST (Bandit/Semgrep)
   - template: Security/Secret-Detection.gitlab-ci.yml # Secret scanning (Gitleaks)
   - template: Jobs/Container-Scanning.gitlab-ci.yml   # Trivy-based container scanning
+  - template: Jobs/SAST.gitlab-ci.yml
 
 stages:
   - test
@@ -15,6 +16,7 @@ variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
   DOCKER_DRIVER: overlay2
   DOCKER_BUILDKIT: "1"     # Faster Docker builds
+  GITLAB_ADVANCED_SAST_ENABLED: true
 
 cache:
   key: "pip-cache"
