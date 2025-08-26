@@ -1,7 +1,7 @@
 # Includes: SAST, Secret Detection, Container Scanning
 include:
-  - template: Security/Secret-Detection.gitlab-ci.yml # Secret scanning (Gitleaks)
-  - template: Jobs/Container-Scanning.gitlab-ci.yml   # Trivy-based container scanning
+  - template: Security/Secret-Detection.gitlab-ci.yml  # Secret scanning (Gitleaks)
+  - template: Jobs/Container-Scanning.gitlab-ci.yml    # Trivy-based container scanning
   - template: Jobs/SAST.gitlab-ci.yml
 
 stages:
@@ -192,11 +192,9 @@ dependency_scan:
       - pip-audit.json
     expire_in: 1 week
 
-# ---------- Extra: Trivy HTML reports + GitLab Pages ----------
 trivy_html_reports:
   image:
-    name: aquasecurity/trivy:0.65.0
-    # Trivy's container has an entrypoint; unset it so our script runs.
+    name: docker.io/aquasec/trivy:0.65.0
     entrypoint: [""]
   stage: scan
   needs: ["build_attacker", "build_ids", "build_web"]
@@ -204,32 +202,17 @@ trivy_html_reports:
     - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_TAG'
   variables:
     TRIVY_NO_PROGRESS: "true"
-    # Let Trivy pull from your GitLab Container Registry (private project).
-    TRIVY_USERNAME: "$CI_REGISTRY_USER"
+    TRIVY_USERNAME: "$CI_REGISTRY_USER"    # for your private GitLab registry
     TRIVY_PASSWORD: "$CI_REGISTRY_PASSWORD"
   script:
     - set -euo pipefail
+    - apk add --no-cache curl
     - mkdir -p public/reports
-    # Get the official HTML template (some installs don't include contrib/).
-    - curl -sSfL -o html.tpl https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl
-
-    # Choose the right tag (commit SHA on main, or the release tag).
+    - curl -fsSL -o html.tpl https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl
     - export _TAG="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
-
-    # Generate one HTML per image
-    - trivy image --timeout 5m --ignore-unfixed \
-        --format template --template "@$PWD/html.tpl" \
-        -o public/reports/attacker.html "$CI_REGISTRY_IMAGE/attacker:${_TAG}"
-
-    - trivy image --timeout 5m --ignore-unfixed \
-        --format template --template "@$PWD/html.tpl" \
-        -o public/reports/ids.html "$CI_REGISTRY_IMAGE/ids:${_TAG}"
-
-    - trivy image --timeout 5m --ignore-unfixed \
-        --format template --template "@$PWD/html.tpl" \
-        -o public/reports/web.html "$CI_REGISTRY_IMAGE/web:${_TAG}"
-
-    # Minimal index page
+    - trivy image --ignore-unfixed --format template --template "@$PWD/html.tpl" -o public/reports/attacker.html "$CI_REGISTRY_IMAGE/attacker:${_TAG}"
+    - trivy image --ignore-unfixed --format template --template "@$PWD/html.tpl" -o public/reports/ids.html      "$CI_REGISTRY_IMAGE/ids:${_TAG}"
+    - trivy image --ignore-unfixed --format template --template "@$PWD/html.tpl" -o public/reports/web.html      "$CI_REGISTRY_IMAGE/web:${_TAG}"
     - |
       cat > public/index.html <<'HTML'
       <!doctype html><meta charset="utf-8">
@@ -242,24 +225,19 @@ trivy_html_reports:
       </ul>
       HTML
   artifacts:
+    paths: [public/]
     expose_as: "Trivy HTML reports"
-    paths:
-      - public/
     expire_in: 1 week
-  allow_failure: true   # optional: don’t fail the pipeline on findings
+  allow_failure: true
 
 pages:
   stage: deploy
-  needs:
-    - job: trivy_html_reports
-      artifacts: true
+  needs: [{ job: trivy_html_reports, artifacts: true }]
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-  script:
-    - echo "Publishing Trivy HTML reports to Pages"
+  script: [ 'echo "Publish Pages"' ]
   artifacts:
-    paths:
-      - public
+    paths: [public]
     expire_in: 30 days
 
 # ---------- 2b) BUILD (PyPI dists) ----------
