@@ -1,6 +1,5 @@
 # Includes: SAST, Secret Detection, Container Scanning
 include:
-  - template: Security/SAST.gitlab-ci.yml            # Python SAST (Bandit/Semgrep)
   - template: Security/Secret-Detection.gitlab-ci.yml # Secret scanning (Gitleaks)
   - template: Jobs/Container-Scanning.gitlab-ci.yml   # Trivy-based container scanning
   - template: Jobs/SAST.gitlab-ci.yml
@@ -192,6 +191,53 @@ dependency_scan:
     paths:
       - pip-audit.json
     expire_in: 1 week
+
+# ---------- SBOM → HTML/MD/XLSX via sbom2doc ----------
+sbom_readable_reports:
+  stage: scan
+  image: python:3.12-slim
+  # Wait for the three Trivy container-scanning jobs and fetch their artifacts
+  needs:
+    - job: container_scan_attacker
+      artifacts: true
+    - job: container_scan_ids
+      artifacts: true
+    - job: container_scan_web
+      artifacts: true
+  rules:
+    - if: '$CI_COMMIT_TAG || $CI_COMMIT_BRANCH == "main"'
+  before_script:
+    - python -m pip install --upgrade pip
+    - pip install --no-cache-dir sbom2doc==0.6.0
+  script:
+    - |
+      set -eu
+      mkdir -p sbom-reports
+
+      # Find CycloneDX SBOMs emitted by GitLab's container scanning (Trivy)
+      files="$(find . -type f -name 'gl-sbom-*.cdx.json')"
+
+      if [ -z "$files" ]; then
+        echo "No CycloneDX SBOMs found (gl-sbom-*.cdx.json)."
+        exit 0
+      fi
+
+      count=0
+      for f in $files; do
+        base="$(basename "$f" .cdx.json)"
+        echo "Converting: $f"
+        sbom2doc -i "$f" -f html     -o "sbom-reports/sbom-${base}.html"
+        sbom2doc -i "$f" -f markdown -o "sbom-reports/sbom-${base}.md"
+        sbom2doc -i "$f" -f excel    -o "sbom-reports/sbom-${base}.xlsx"
+        count=$((count+1))
+      done
+      echo "Converted $count SBOM file(s)."
+  artifacts:
+    expose_as: "SBOM reports"
+    paths:
+      - sbom-reports/     # directory path (no wildcards) required with expose_as
+    expire_in: 1 week
+  allow_failure: true
 
 # ---------- 2b) BUILD (PyPI dists) ----------
 build_pypi_dist:
